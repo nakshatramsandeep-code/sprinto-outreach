@@ -18,7 +18,7 @@ const TECH_LEAD = /\b(cto|chief technology|vp (of )?engineering|head of engineer
 const FOUNDER = /\b(founder|co-founder|ceo|chief executive|coo|chief operating)\b/i;
 const JUNIOR = /\b(intern|assistant|associate|junior|student|recruit|sales|marketing|support|customer success)\b/i;
 
-export function scorePerson(p: HunterPerson, smallCompany: boolean): Ranked {
+export function scorePerson(p: HunterPerson, smallCompany: boolean, preferred: string[] = []): Ranked {
   const why: string[] = [];
   let score = 0;
   const title = p.position ?? "";
@@ -29,6 +29,9 @@ export function scorePerson(p: HunterPerson, smallCompany: boolean): Ranked {
   else if (TECH_LEAD.test(title)) { score += smallCompany ? 45 : 30; why.push("technology leader"); }
   else if (FOUNDER.test(title)) { score += smallCompany ? 45 : 20; why.push("founder/executive"); }
 
+  // Title words learned from contacts the owner chose by hand (approved on the Learning page)
+  const learned = preferred.find((k) => k && title.toLowerCase().includes(k.toLowerCase()));
+  if (learned) { score += 20; why.push(`title matches "${learned}" (learned from your choices)`); }
   if (JUNIOR.test(title)) { score -= 40; why.push("junior or non-buyer role"); }
   if (p.seniority === "executive") { score += 10; why.push("executive seniority"); }
   if (p.verified) { score += 10; why.push("email verified"); }
@@ -44,10 +47,11 @@ export function pickContact(
   people: HunterPerson[],
   smallCompany: boolean,
   autoAccept: number = MIN_CONTACT_SCORE,
+  preferred: string[] = [],
 ): { chosen: Ranked | null; best: Ranked | null; ranked: Ranked[] } {
   const ranked = people
     .filter((p) => p.email && p.first_name && p.position) // need a real name and a role
-    .map((p) => scorePerson(p, smallCompany))
+    .map((p) => scorePerson(p, smallCompany, preferred))
     .sort((a, b) => b.score - a.score);
   const top = ranked[0];
   return {

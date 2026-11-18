@@ -13,6 +13,8 @@ const LINKS = [
   { href: "/discover", label: "Discover" },
   { href: "/accounts", label: "Accounts" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/evals", label: "Evals" },
+  { href: "/learning", label: "Learning" },
   { href: "/rules", label: "ICP & Rules" },
   { href: "/settings", label: "Settings" },
 ];

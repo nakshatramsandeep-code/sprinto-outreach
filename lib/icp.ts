@@ -23,6 +23,10 @@ export type IcpConfig = {
   discoveryDailyCap: number;
   email: { minWords: number; maxWords: number; bannedPhrases: string[] };
   followUpDays: number[];
+  // Filled by approving suggestions on the Learning page (never changed automatically):
+  emailStyleNotes: string[]; // extra rules for the writer, e.g. "Keep emails under 90 words"
+  preferredTitleKeywords: string[]; // job-title words that boost a contact, learned from the contacts you chose by hand
+  sourcePriority: string[]; // which discovery source is queued first
 };
 
 export const STAGES = ["Pre-seed", "Seed", "Series A", "Series B", "Series C", "Series D+"];
@@ -48,6 +52,9 @@ export const DEFAULT_ICP: IcpConfig = {
   discoveryDailyCap: 20,
   email: { minWords: CONFIG.email.minWords, maxWords: CONFIG.email.maxWords, bannedPhrases: [...CONFIG.email.bannedPhrases] },
   followUpDays: [3, 7, 14],
+  emailStyleNotes: [],
+  preferredTitleKeywords: [],
+  sourcePriority: ["hn_hiring", "gemini_search", "funding_news"],
 };
 
 // Merge a stored (possibly older) config over the defaults so new fields always exist.

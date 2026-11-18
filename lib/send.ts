@@ -1,6 +1,7 @@
 import { q, logStep } from "./db";
 import { sendToOwner } from "./mailer";
 import { audit, closeCheckpoints } from "./settings";
+import { diffEdit } from "./diff";
 
 type Row = { id: number; company_id: number; kind: string; subject: string; body: string; original_body: string | null };
 
@@ -28,8 +29,10 @@ export async function sendDraft(draftId: number, edit?: { subject?: string; body
       body: d.body,
       wouldBeRecipient: { name: `${person.first_name} ${person.last_name ?? ""}`.trim(), email: person.email, title: person.position, company: company.name ?? company.domain },
     });
-    const edited = d.original_body !== null && d.original_body.trim() !== d.body.trim();
-    await q("UPDATE drafts SET review_status='sent', sent_at=now(), message_id=$2, edited=$3 WHERE id=$1", [d.id, messageId, edited]);
+    const diff = d.original_body !== null ? diffEdit(d.original_body, d.body) : null;
+    const edited = diff !== null;
+    // The edit diff is the raw material for the Learning page: what do you keep cutting or adding?
+    await q("UPDATE drafts SET review_status='sent', sent_at=now(), message_id=$2, edited=$3, edit_diff=$4 WHERE id=$1", [d.id, messageId, edited, diff ? JSON.stringify(diff) : null]);
     await closeCheckpoints(d.company_id, ["send", "angle"], "resolved", { sent: true });
     await logStep(d.company_id, "send", { to: "owner_inbox", messageId, kind: d.kind, edited });
     await audit(actor, "approve & send", { draft: d.id, company: d.company_id, kind: d.kind, edited });

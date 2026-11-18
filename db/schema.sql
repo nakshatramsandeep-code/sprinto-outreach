@@ -135,3 +135,33 @@ CREATE TABLE IF NOT EXISTS email_events (
 
 UPDATE drafts SET original_body = body WHERE original_body IS NULL;
 UPDATE companies SET score = rank WHERE score IS NULL AND rank IS NOT NULL;
+
+-- ===== v3: eval harness + feedback loop =====
+
+ALTER TABLE drafts ADD COLUMN IF NOT EXISTS edit_diff JSONB;
+
+CREATE TABLE IF NOT EXISTS eval_cases (
+  id         SERIAL PRIMARY KEY,
+  domain     TEXT UNIQUE NOT NULL,
+  company_id INT,
+  name       TEXT,
+  pages      JSONB NOT NULL,
+  expected   JSONB NOT NULL DEFAULT '{}',
+  labeled_by TEXT,
+  note       TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS eval_runs (
+  id          SERIAL PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  model       TEXT NOT NULL,
+  prompt_hash TEXT NOT NULL,
+  icp_version INT,
+  note        TEXT,
+  metrics     JSONB NOT NULL,
+  results     JSONB NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS eval_runs_kind_idx ON eval_runs(kind, id);

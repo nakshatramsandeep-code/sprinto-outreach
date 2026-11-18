@@ -247,19 +247,19 @@ export async function discover(): Promise<DiscoverResult> {
     if (r.length) { if (c.domain) added++; else unresolved++; } else alreadySeen++;
   }
 
-  const queuedIds = (await getAutoQueue()) ? await queueNew(icp.discoveryDailyCap, CONFIG.discovery.maxCandidatesPerRun) : [];
+  const queuedIds = (await getAutoQueue()) ? await queueNew(icp.discoveryDailyCap, CONFIG.discovery.maxCandidatesPerRun, icp.sourcePriority) : [];
   await logStep(null, "discovery_run", { found: raw.length, added, unresolved, alreadySeen, queued: queuedIds.length, rejected: rejected.slice(0, 30), sourceErrors, tokens: meter.used }, meter.used);
   return { found: raw.length, added, queuedIds, unresolved, alreadySeen, rejected, sourceErrors };
 }
 
 // Turn resolved, unseen candidates into queued companies (respects the daily cap).
-export async function queueNew(dailyCap: number, perRun: number): Promise<number[]> {
+export async function queueNew(dailyCap: number, perRun: number, priority: string[] = ["hn_hiring", "gemini_search", "funding_news"]): Promise<number[]> {
   const today = await q<{ n: number }>("SELECT COUNT(*)::int AS n FROM candidates WHERE status='queued' AND created_at::date = now()::date");
   const room = Math.max(0, Math.min(perRun, dailyCap - (today[0]?.n ?? 0)));
   if (room === 0) return [];
   const rows = await q<{ id: number }>(
     `SELECT id FROM candidates WHERE status='new' AND domain IS NOT NULL
-     ORDER BY CASE source WHEN 'hn_hiring' THEN 0 WHEN 'gemini_search' THEN 1 ELSE 2 END, created_at LIMIT $1`, [room],
+     ORDER BY COALESCE(array_position($2::text[], source), 99), created_at LIMIT $1`, [room, priority],
   );
   const ids: number[] = [];
   for (const r of rows) { const cid = await queueCandidate(r.id); if (cid) ids.push(cid); }

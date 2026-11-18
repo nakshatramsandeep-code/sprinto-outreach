@@ -219,7 +219,7 @@ async function contactAndDraft(company: CompanyRow, fields: Fields, cfg: IcpConf
   try {
     const people = await hunterDomainSearch(company.domain, cfg.hunter.monthlyCap);
     const small = !/series\s*(c|d|e)/i.test(fields.funding_stage.value ?? "");
-    const picked = pickContact(people, small, cfg.hunter.autoAcceptScore);
+    const picked = pickContact(people, small, cfg.hunter.autoAcceptScore, cfg.preferredTitleKeywords);
     chosen = picked.chosen;
     contact = { provider: "hunter", total: people.length, chosen: picked.chosen, best: picked.best, top: picked.ranked };
     await logStep(id, "contact", { provider: "hunter", found: people.length, chosen: picked.chosen, top: picked.ranked });
@@ -257,7 +257,7 @@ export async function draftFor(company: { id: number; domain: string; name: stri
   const name = fields.company_name.value ?? company.name ?? company.domain;
   const profile = await getProfile();
   const evidence = evidenceMap(fields, company.discovery?.quote ?? null);
-  const { draft, validation } = await draftWithValidation({ company: name, domain: company.domain, person, evidence, meter, profile, rules: cfg.email });
+  const { draft, validation } = await draftWithValidation({ company: name, domain: company.domain, person, evidence, meter, profile, rules: cfg.email, styleNotes: cfg.emailStyleNotes });
   await q(
     `INSERT INTO drafts (company_id, kind, pains, hook_field, subject, body, original_body, validation, review_status)
      VALUES ($1,'first',$2,$3,$4,$5,$5,$6,'pending')
@@ -274,14 +274,16 @@ export async function draftFor(company: { id: number; domain: string; name: stri
   return { ok: validation.ok, problems: validation.problems };
 }
 
-// A human picked or typed a contact at the H3 checkpoint: continue from there without re-scraping.
-export async function continueWithContact(id: number, person: Ranked, override: boolean) {
+// A human answered the H3 checkpoint: continue from there without re-scraping.
+// "confirmed" = they accepted our best match; "override" = they chose someone else or typed a contact.
+// The difference feeds contact accuracy and the Learning page.
+export async function continueWithContact(id: number, person: Ranked, mode: "confirmed" | "override", reason?: string) {
   const { config: cfg } = await getIcp();
   const rows = await q<CompanyRow & { contact: Record<string, unknown> | null }>("SELECT id, domain, name, status, source, discovery, extra_urls, fields, flags, score, contact FROM companies WHERE id=$1", [id]);
   const c = rows[0];
   if (!c?.fields) throw new Error("company has no research yet");
   const meter = new Meter(cfg.tokensPerCompany);
-  const contact = { ...(c.contact ?? {}), chosen: { ...person, override }, override };
+  const contact = { ...(c.contact ?? {}), chosen: { ...person, override: mode === "override" }, override: mode === "override", confirmed: mode === "confirmed", override_reason: reason ?? null, decided_by_human: true };
   await q("UPDATE companies SET contact=$2 WHERE id=$1", [id, JSON.stringify(contact)]);
   const d = await draftFor(c, c.fields, cfg, person, meter);
   const flags = (c.flags ?? []).filter((f) => !["no_suitable_contact", "hunter_quota_exhausted", "contact_lookup_failed"].includes(f));

@@ -41,6 +41,7 @@ export default function Review() {
   const [reason, setReason] = useState(REASONS[0]);
   const [url, setUrl] = useState("");
   const [man, setMan] = useState({ first_name: "", last_name: "", title: "", email: "" });
+  const [why, setWhy] = useState("");
   useEffect(() => { setSubject(draft?.subject ?? ""); setBody(draft?.body ?? ""); setMsg(""); setUrl(""); }, [cur?.id, draft?.id]);
 
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
@@ -142,17 +143,23 @@ export default function Review() {
                     {(cur.data.top as any[]).map((p, i) => (
                       <div className="cardlet" key={i}>
                         <div className="row"><b>{p.first_name} {p.last_name}</b><span className="muted">{p.position}</span><span className="pill">score {p.score}</span>{p.verified && <span className="pill ok">verified</span>}
-                          <button className="ghost right" disabled={busy} style={{ padding: "4px 14px" }} onClick={() => act("pick", { index: i })}>Use this person</button></div>
+                          <button className="ghost right" disabled={busy} style={{ padding: "4px 14px" }} onClick={() => act("pick", { index: i, why })}>Use this person</button></div>
                         <div className="small muted">{p.email} · {p.why?.join(", ")}</div>
                       </div>
                     ))}
                   </>}
+                  <div className="row small" style={{ margin: "8px 0" }}>
+                    <span className="muted">If you replace our pick, why? (helps the system learn)</span>
+                    <select value={why} onChange={(e) => setWhy(e.target.value)} style={{ width: "auto", padding: 7, borderRadius: 10, border: "1px solid var(--line)" }}>
+                      <option value="">no reason</option><option>wrong role</option><option>left the company</option><option>bad email</option><option>better fit</option><option>other</option>
+                    </select>
+                  </div>
                   <b className="small">Or enter a contact by hand</b>
                   <div className="formgrid" style={{ margin: "8px 0" }}>
                     {(["first_name", "last_name", "title", "email"] as const).map((k) => <input key={k} placeholder={k.replace("_", " ")} value={man[k]} onChange={(e) => setMan({ ...man, [k]: e.target.value })} />)}
                   </div>
                   <div className="row">
-                    <button disabled={busy || !man.first_name || !man.email} onClick={() => act("manual", man)}>Use these details</button>
+                    <button disabled={busy || !man.first_name || !man.email} onClick={() => act("manual", { ...man, why })}>Use these details</button>
                     <button className="ghost" disabled={busy} onClick={() => act("skip")}>Skip</button>
                   </div>
                 </>)}

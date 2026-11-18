@@ -2,6 +2,7 @@ import { route, bad, idOf, readJson } from "@/lib/api";
 import { q } from "@/lib/db";
 import { runCompany, continueWithContact } from "@/lib/pipeline";
 import { sendDraft } from "@/lib/send";
+import { addEvalFromDecision } from "@/lib/evals";
 import { audit, openCheckpoint, KIND_CODE, type CheckpointKind } from "@/lib/settings";
 import type { Ranked } from "@/lib/rank";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 type Body = {
   action?: string; reason?: string; url?: string; subject?: string; body?: string; index?: number;
-  first_name?: string; last_name?: string; email?: string; title?: string;
+  first_name?: string; last_name?: string; email?: string; title?: string; why?: string;
 };
 type Cp = { id: number; company_id: number; kind: CheckpointKind; reason: string; data: { top?: Ranked[]; best?: Ranked | null; day?: number }; status: string };
 
@@ -37,7 +38,9 @@ export const POST = route(async (req, ctx) => {
       const reason = (b.reason ?? "other").slice(0, 60);
       await q("UPDATE companies SET status='disqualified', reason=$2, updated_at=now() WHERE id=$1", [cid, reason]);
       await resolve(cp, "resolved", { action: "disqualify", reason });
-      return { ok: true };
+      // The human's decision is a label: it joins the golden set so the evals learn from it.
+      const evalCase = await addEvalFromDecision(cid, reason).catch(() => null);
+      return { ok: true, addedToEvalSet: !!evalCase };
     }
     if (a === "qualify" || a === "retry") {
       await resolve(cp, "resolved", { action: a });
@@ -57,8 +60,14 @@ export const POST = route(async (req, ctx) => {
 
   if (cp.kind === "contact") {
     let person: Ranked | null = null;
-    if (a === "use_best") person = cp.data.best ?? cp.data.top?.[0] ?? null;
-    if (a === "pick") person = cp.data.top?.[b.index ?? 0] ?? null;
+    // confirmed = they accepted our best match; override = they chose someone else or typed a contact (feeds accuracy + learning)
+    let mode: "confirmed" | "override" = "override";
+    if (a === "use_best") { person = cp.data.best ?? cp.data.top?.[0] ?? null; mode = "confirmed"; }
+    if (a === "pick") {
+      person = cp.data.top?.[b.index ?? 0] ?? null;
+      const bestEmail = (cp.data.best ?? cp.data.top?.[0])?.email;
+      mode = person && person.email === bestEmail ? "confirmed" : "override";
+    }
     if (a === "manual") {
       if (!b.first_name?.trim() || !b.email || !EMAIL_RE.test(b.email)) return bad("first name and a valid email are required");
       person = {
@@ -67,8 +76,9 @@ export const POST = route(async (req, ctx) => {
       };
     }
     if (person) {
-      await resolve(cp, "resolved", { action: a, person: `${person.first_name} ${person.last_name ?? ""} (${person.position})` });
-      const d = await continueWithContact(cid, person, true);
+      const why = (b.why ?? "").slice(0, 80) || undefined;
+      await resolve(cp, "resolved", { action: a, mode, why, person: `${person.first_name} ${person.last_name ?? ""} (${person.position})` });
+      const d = await continueWithContact(cid, person, mode, why);
       return { ok: true, draft: d };
     }
   }

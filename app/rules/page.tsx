@@ -13,6 +13,7 @@ type Cfg = {
   loopFetchCap: number; hunter: { monthlyCap: number; autoAcceptScore: number }; rerunDays: number;
   tokensPerCompany: number; tokensPerRun: number; usdPerMillionTokens: number; confirmBatchOver: number; discoveryDailyCap: number;
   email: { minWords: number; maxWords: number; bannedPhrases: string[] }; followUpDays: number[];
+  emailStyleNotes: string[]; preferredTitleKeywords: string[]; sourcePriority: string[];
 };
 type Resp = { config: Cfg; version: number; versions: { version: number; note: string; active: boolean; created_by: string; created_at: string }[]; stages: string[] };
 type Preview = { problems: string[]; moved: { id: number; company: string; from: string; to: string; fromScore: number; toScore: number }[]; total: number; movedCount?: number };
@@ -126,6 +127,15 @@ export default function Rules() {
             </div>
             <div className="field" style={{ marginTop: 12, maxWidth: 320 }}><label>Follow-up days after the first email</label>
               <input value={cfg.followUpDays.join(", ")} onChange={(e) => set({ followUpDays: e.target.value.split(",").map((x) => Number(x.trim())).filter((x) => x > 0) })} /></div>
+            <h2>Learned from your choices <span className="small muted">usually filled by approving suggestions on the Learning page</span></h2>
+            <div className="small muted" style={{ marginBottom: 6 }}>Job-title words that boost a contact</div>
+            <Tags value={cfg.preferredTitleKeywords} onChange={(v) => set({ preferredTitleKeywords: v })} placeholder="e.g. security" />
+            <div className="small muted" style={{ margin: "14px 0 6px" }}>Discovery source order (first = queued first)</div>
+            <div className="chips">{cfg.sourcePriority.map((s, i) => (
+              <span key={s} className="chipbtn on" style={{ cursor: "default" }}>{i + 1}. {s}
+                <button type="button" className="ghost" style={{ padding: "0 6px", marginLeft: 6, background: "transparent", color: "#fff", border: 0 }} disabled={i === 0}
+                  onClick={() => { const a = [...cfg.sourcePriority]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; set({ sourcePriority: a }); }}>↑</button></span>
+            ))}</div>
           </div>
         </>)}
 
@@ -138,6 +148,9 @@ export default function Rules() {
             <h2>Banned phrases</h2>
             <Tags value={cfg.email.bannedPhrases} onChange={(v) => set({ email: { ...cfg.email, bannedPhrases: v } })} placeholder="phrase the email must never use" />
             <p className="small muted">Drafts that break these rules are flagged for your review before they can be sent.</p>
+            <h2>Style notes for the writer</h2>
+            <div className="small muted" style={{ marginBottom: 6 }}>Extra instructions added to every draft, e.g. "Keep emails under 90 words". Often filled by approving suggestions on the Learning page.</div>
+            <Tags value={cfg.emailStyleNotes} onChange={(v) => set({ emailStyleNotes: v })} placeholder="a short instruction" />
           </div>
         )}
 

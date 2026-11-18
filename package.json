@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "eval": "node scripts/eval.mjs",
     "db:apply": "node scripts/apply-schema.mjs"
   },
   "dependencies": {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { CONFIG, MODELS } from "./config";
 import { gemini, parseJson, Meter } from "./gemini";
 import type { Fields } from "./fields";
@@ -61,7 +62,7 @@ export function validateDraft(
 const buildSystem = (profile: SenderProfile) => `You write one cold email for Sprinto. ${profile.oneLiner}
 Rules: use ONLY the evidence given${profile.proofPoints.length ? " and the approved proof points" : ""}; never invent facts, customers or numbers; no flattery clichés; plain, specific, human.`;
 
-export async function draftEmail(args: {
+type EmailArgs = {
   company: string;
   domain: string;
   person: Ranked;
@@ -70,11 +71,14 @@ export async function draftEmail(args: {
   feedback?: string[];
   profile?: SenderProfile;
   rules?: { minWords: number; maxWords: number; bannedPhrases: readonly string[] };
-}): Promise<Draft> {
+  styleNotes?: string[];
+};
+
+export function buildEmailPrompt(args: Omit<EmailArgs, "meter">): string {
   const { person, evidence } = args;
   const profile = args.profile ?? DEFAULT_PROFILE;
   const rules = args.rules ?? CONFIG.email;
-  const prompt = `Recipient: ${person.first_name} ${person.last_name ?? ""}, ${person.position} at ${args.company} (${args.domain}).
+  return `Recipient: ${person.first_name} ${person.last_name ?? ""}, ${person.position} at ${args.company} (${args.domain}).
 
 EVIDENCE (the only facts you may use). Keys are the allowed evidence_field values:
 ${Object.entries(evidence).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
@@ -82,8 +86,22 @@ ${Object.entries(evidence).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
 Task:
 1. Pick the TWO most likely pain points THIS person's role has, each grounded in one evidence key.
 2. Write the email: address ${person.first_name} by first name; open with one specific hook from one evidence key; connect it to one pain; one low-friction ask (a short call or a reply); ${rules.minWords}-${rules.maxWords} words; mention Sprinto once; sign off as "${profile.senderName}, ${profile.signoff}". No placeholders.${profile.proofPoints.length ? `\nApproved proof points (you may use at most one, verbatim, never alter numbers): ${profile.proofPoints.map((p) => p.text).join(" | ")}` : ""}
-${args.feedback?.length ? `\nYour previous attempt failed these checks, fix them: ${args.feedback.join("; ")}\n` : ""}
+${args.styleNotes?.length ? `\nHouse style notes from the owner (follow them): ${args.styleNotes.join(" | ")}\n` : ""}${args.feedback?.length ? `\nYour previous attempt failed these checks, fix them: ${args.feedback.join("; ")}\n` : ""}
 Return JSON: { "pains": [ {"pain": string, "evidence_field": string}, {"pain": string, "evidence_field": string} ], "hook_field": string, "subject": string, "body": string }`;
+}
+
+// A short fingerprint of the email prompt + house rules: any wording or rule change shows up in the eval history.
+export function emailFingerprint(args: { profile?: SenderProfile; rules?: EmailArgs["rules"]; styleNotes?: string[] } = {}): string {
+  const dummy: Omit<EmailArgs, "meter"> = {
+    company: "Acme", domain: "acme.io", evidence: { buyer: "x" }, profile: args.profile, rules: args.rules, styleNotes: args.styleNotes,
+    person: { email: "a@b.c", first_name: "Sam", last_name: "Lee", position: "CTO", seniority: null, department: null, confidence: null, verified: false, score: 0, why: [] },
+  };
+  return createHash("sha1").update(buildSystem(args.profile ?? DEFAULT_PROFILE) + buildEmailPrompt(dummy)).digest("hex").slice(0, 8);
+}
+
+export async function draftEmail(args: EmailArgs): Promise<Draft> {
+  const profile = args.profile ?? DEFAULT_PROFILE;
+  const prompt = buildEmailPrompt(args);
   const { text } = await gemini({ model: MODELS.pro(), system: buildSystem(profile), prompt, json: true, meter: args.meter, temperature: 0.5 });
   return parseJson<Draft>(text);
 }
