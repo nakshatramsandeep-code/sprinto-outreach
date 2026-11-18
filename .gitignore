@@ -9,3 +9,5 @@ next-env.d.ts
 
 .claude
 .vercel
+.vercel
+.env*
