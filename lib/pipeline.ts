@@ -14,6 +14,7 @@ import { draftWithValidation, evidenceMap } from "./email";
 import { getIcp, type IcpConfig } from "./icp";
 import { scoreCompany, type DiscoveryInfo } from "./score";
 import { getProfile, openCheckpoint, closeCheckpoints } from "./settings";
+import { friendlyError } from "./errors";
 
 type CompanyRow = {
   id: number; domain: string; name: string | null; status: string; source: string | null;
@@ -203,8 +204,8 @@ export async function runCompany(id: number, opts: { force?: boolean } = {}): Pr
       await finish(id, "manual_review", "token_budget_exceeded", { tokens: e.used, t0, version });
       return { status: "manual_review", reason: "token_budget_exceeded", tokens: e.used };
     }
-    const msg = ((e as Error).message ?? "error").slice(0, 200);
-    await logStep(id, "error", { message: msg });
+    const msg = friendlyError(e);
+    await logStep(id, "error", { message: msg, raw: String((e as Error).message ?? e).slice(0, 400) });
     await finish(id, "failed", msg, { tokens: meter.used, t0, version });
     return { status: "failed", reason: msg, tokens: meter.used };
   }
@@ -234,7 +235,7 @@ async function contactAndDraft(company: CompanyRow, fields: Fields, cfg: IcpConf
       await openCheckpoint(id, "contact", "Hunter's monthly searches are used up: enter a contact by hand (Apollo comes later)", { top: [], total: 0 });
     } else {
       flags.push("contact_lookup_failed");
-      await openCheckpoint(id, "contact", `contact lookup failed: ${(e as Error).message}`, { top: [], total: 0 });
+      await openCheckpoint(id, "contact", `contact lookup failed: ${friendlyError(e)}`, { top: [], total: 0 });
     }
     await logStep(id, "contact_failed", { error: (e as Error).message });
   }

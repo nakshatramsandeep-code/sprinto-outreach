@@ -23,7 +23,12 @@ export default function Nav() {
   const path = usePathname();
   const [open, setOpen] = useState<number | null>(null);
   useEffect(() => {
-    api<{ kpis: { needsYou: number } }>("/api/home").then((r) => setOpen(r.kpis.needsYou)).catch(() => {});
+    const refresh = () => api<{ kpis: { needsYou: number } }>("/api/home").then((r) => setOpen(r.kpis.needsYou)).catch(() => {});
+    refresh();
+    // pages announce "checkpoints-changed" after an action; the timer is a backstop for changes made elsewhere
+    window.addEventListener("checkpoints-changed", refresh);
+    const t = setInterval(refresh, 30_000);
+    return () => { window.removeEventListener("checkpoints-changed", refresh); clearInterval(t); };
   }, [path]);
   return (
     <div className="topbar">

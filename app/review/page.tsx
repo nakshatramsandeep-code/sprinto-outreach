@@ -51,6 +51,7 @@ export default function Review() {
       await api(`/api/checkpoints/${cur.id}`, { body: { action, ...extra } });
       setMsg("Done.");
       await reload();
+      window.dispatchEvent(new Event("checkpoints-changed")); // keeps the nav badge in step
     } catch (e) { setMsg((e as Error).message); }
     setBusy(false);
   }, [cur, reload]);

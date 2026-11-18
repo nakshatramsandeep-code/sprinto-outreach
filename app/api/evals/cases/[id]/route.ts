@@ -12,6 +12,8 @@ export const PATCH = route(async (req, ctx) => {
   const id = await idOf(ctx);
   const b = await readJson<{ expected?: Expected; confirm?: boolean }>(req);
   if (!Number.isInteger(id)) return bad("bad id");
+  // A missing or malformed body must never be read as "clear all labels".
+  if (!b.confirm && (typeof b.expected !== "object" || b.expected === null)) return bad("expected labels required");
   const e = b.expected ?? {};
   const clean: Expected = {};
   if (typeof e.certified === "boolean") clean.certified = e.certified;

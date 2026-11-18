@@ -28,6 +28,7 @@ export const GET = route(async () => {
 
 export const POST = route(async (req) => {
   const b = await readJson<{ autoQueue?: boolean; profile?: SenderProfile }>(req);
+  if (typeof b.autoQueue !== "boolean" && !b.profile) return bad("nothing to save: send autoQueue or profile");
   if (typeof b.autoQueue === "boolean") {
     await setSetting("auto_queue", b.autoQueue);
     await audit("owner", "toggle auto queue discovered", { on: b.autoQueue });

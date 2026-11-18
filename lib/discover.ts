@@ -5,6 +5,7 @@ import { getPage, FetchError } from "./fetcher";
 import { normalizeDomain, isBlockedCompany, nameMatches } from "./domain";
 import { getIcp } from "./icp";
 import { getAutoQueue, audit } from "./settings";
+import { friendlyError } from "./errors";
 
 export type Source = "hn_hiring" | "gemini_search" | "funding_news";
 export type Candidate = {
@@ -77,7 +78,7 @@ ${unique.map((c, i) => `[${i + 1}] ${c}`).join("\n")}`;
         source: "hn_hiring" as const, query: "HN Who is hiring: SOC 2 / compliance", score: strength(c.quote, 2),
       }));
   } catch (e) {
-    errs.push(`hn_hiring: ${String((e as Error).message).slice(0, 160)}`);
+    errs.push(`hn_hiring: ${friendlyError(e)}`);
     return [];
   }
 }
@@ -99,7 +100,7 @@ Return ONLY a JSON array: [{ "name": string, "domain": string, "quote": string, 
         out.push({ name: c.name, domain: c.domain, quote: c.quote, url: c.source_url ?? null, source: "gemini_search", query, score: strength(c.quote, 1) });
       }
     } catch (e) {
-      errs.push(`gemini_search: ${String((e as Error).message).slice(0, 160)}`);
+      errs.push(`gemini_search: ${friendlyError(e)}`);
     }
   }));
   return out;
@@ -157,7 +158,7 @@ ${items.map((it, i) => `[${i}] ${it.title}`).join("\n")}`;
     }
     return out;
   } catch (e) {
-    errs.push(`news extraction: ${String((e as Error).message).slice(0, 120)}`);
+    errs.push(`news extraction: ${friendlyError(e)}`);
     return [];
   }
 }
