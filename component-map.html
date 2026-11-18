@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprinto Outreach Copilot - Components Map</title>
+<style>
+  :root{
+    --bg:#f0f3f9; --ink:#1f2a44; --muted:#5b6785; --head:#3b4a86; --lane:#56608a; --laneAlt:#e6eaf5; --laneBase:#f0f3f9;
+    --user:#4a63e0; --app:#7a45d6; --rules:#d9a100; --data:#12808f; --human:#d6336c; --cut:#9aa3b5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Arial,sans-serif}
+  h1{text-align:center;margin:0 0 4px;font-size:24px}
+  .sub{text-align:center;color:var(--muted);margin-bottom:18px}
+  .wrap{overflow-x:auto}
+  .grid{display:grid;grid-template-columns:150px repeat(5,minmax(190px,1fr));min-width:1100px}
+  .h{background:var(--head);color:#fff;font-weight:700;font-size:16px;text-align:center;padding:12px;border-right:2px solid var(--bg)}
+  .lane{background:var(--lane);color:#fff;padding:12px 8px;text-align:center;font-weight:700;border-bottom:2px solid var(--bg);display:flex;flex-direction:column;justify-content:center}
+  .lane small{font-weight:400;opacity:.85}
+  .cell{padding:10px 8px;border-bottom:2px solid var(--bg);display:flex;align-items:center;justify-content:center;min-height:104px}
+  .cell.alt{background:var(--laneAlt)} .cell.base{background:var(--laneBase)}
+  .card{position:relative;background:#fff;border:2px solid;border-radius:9px;padding:9px 10px;width:100%;font-size:12.5px;color:var(--muted)}
+  .card b{display:block;color:var(--ink);font-size:13.5px;text-align:center;margin-bottom:3px}
+  .card span{display:block;text-align:center}
+  .card i{position:absolute;top:-10px;left:-10px;width:24px;height:24px;border-radius:50%;color:#fff;font:700 12px/24px system-ui;text-align:center;font-style:normal}
+  .c-user{border-color:var(--user)} .c-user i{background:var(--user)}
+  .c-app{border-color:var(--app)} .c-app i{background:var(--app)}
+  .c-rules{border-color:var(--rules)} .c-rules i{background:var(--rules)}
+  .c-data{border-color:var(--data)} .c-data i{background:var(--data)}
+  .c-human{border-color:var(--human)} .c-human i{background:var(--human)}
+  .c-cut{border:2px dashed var(--cut);background:transparent;text-align:center}
+  .legend{display:flex;gap:22px;justify-content:center;margin:16px 0;flex-wrap:wrap;color:var(--muted)}
+  .legend em{display:inline-block;width:14px;height:14px;border:2px solid;border-radius:3px;vertical-align:-2px;margin-right:6px}
+  .flow{max-width:1100px;margin:6px auto;color:var(--muted);font-size:13px}
+  .flow code{background:#e3e8f4;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Sprinto Outreach Copilot - Components Map</h1>
+<div class="sub">The system researches and drafts, the Growth Lead decides and sends &middot; every decision logged &middot; this build sends only to our own inbox</div>
+
+<div class="wrap"><div class="grid">
+  <div class="h">Actor</div><div class="h">Trigger</div><div class="h">Input</div><div class="h">Context</div><div class="h">Processing</div><div class="h">Output</div>
+
+  <!-- Growth Lead -->
+  <div class="lane">Growth Lead<small>(Sprinto owner)</small></div>
+  <div class="cell alt"><div class="card c-user"><i>1</i><b>Clicks Run discovery</b><span>No domains typed in<br>Signs off ICP once</span></div></div>
+  <div class="cell alt"></div><div class="cell alt"></div><div class="cell alt"></div>
+  <div class="cell alt"><div class="card c-human"><i>11</i><b>Reviews and decides</b><span>Reads "why" trail<br>Approve / edit / reject</span></div></div>
+
+  <!-- Web app -->
+  <div class="lane">Web App<small>(Next.js on Vercel)</small></div>
+  <div class="cell base"><div class="card c-app"><i>2</i><b>Run controller</b><span>Dedupe found domains, cache check<br>Run one company at a time</span></div></div>
+  <div class="cell base"></div><div class="cell base"></div><div class="cell base"></div>
+  <div class="cell base"><div class="card c-app"><i>10</i><b>Review UI</b><span>Status table + review queue<br>Flagged and failed shown</span></div></div>
+
+  <!-- Agent pipeline -->
+  <div class="lane">Agent Pipeline<small>(Claude + code)</small></div>
+  <div class="cell alt"></div>
+  <div class="cell alt"><div class="card c-app"><i>4</i><b>Clean + extract</b><span>Strip nav/footer, cap ~2k tokens<br>Named fields (Gemini Flash)</span></div></div>
+  <div class="cell alt"><div class="card c-rules"><i>5</i><b>ICP + Evidence Map</b><span>Required fields, fetch ladder<br>Cap = 4 extra fetches</span></div></div>
+  <div class="cell alt"><div class="card c-app"><i>6</i><b>Qualify loop, then draft</b><span>Code checks gaps, fetches next page<br>PoC pick, 2 pains, email + validator<br>(Gemini Pro)</span></div></div>
+  <div class="cell alt"></div>
+
+  <!-- External data -->
+  <div class="lane">External Data<small>(Web, Hunter.io)</small></div>
+  <div class="cell base"><div class="card c-data"><i>D</i><b>Discovery</b><span>Gemini + Google Search grounding<br>Hacker News hiring posts<br>Finds ICP-fit companies itself</span></div></div>
+  <div class="cell base"><div class="card c-data"><i>3</i><b>Scrape (single-fetch)</b><span>robots.txt, plain fetch<br>Jina fallback if under 200 words</span></div></div>
+  <div class="cell base"></div>
+  <div class="cell base"><div class="card c-data"><i>7</i><b>PoC lookup: Hunter, then Apollo</b><span>Hunter first (25 / month, cached)<br>Apollo CSV once Hunter is spent<br>Qualified companies only</span></div></div>
+  <div class="cell base"></div>
+
+  <!-- Neon -->
+  <div class="lane">Neon Postgres<small>(Database)</small></div>
+  <div class="cell alt"></div><div class="cell alt"></div>
+  <div class="cell alt"><div class="card c-data"><i>8</i><b>Config + cache</b><span>icp_config, pages_cache (7 days)<br>Hunter budget counter, Apollo CSV</span></div></div>
+  <div class="cell alt"></div>
+  <div class="cell alt"><div class="card c-data"><i>9</i><b>Logs everything</b><span>Evidence quotes, loop steps<br>decision_log, drafts, costs</span></div></div>
+
+  <!-- Gmail -->
+  <div class="lane">Resend<small>(Email API)</small></div>
+  <div class="cell base"></div><div class="cell base"></div><div class="cell base"></div><div class="cell base"></div>
+  <div class="cell base"><div class="card c-app"><i>12</i><b>Sends approved draft</b><span>Resend API, to hardcoded own address<br>(env var, no mailbox login)<br>Shows would-be recipient</span></div></div>
+
+  <!-- Out of scope -->
+  <div class="lane" style="background:#8f98b8">Out of scope<small>(the cut)</small></div>
+  <div class="cell alt"></div><div class="cell alt"></div>
+  <div class="cell alt" style="grid-column:span 2"><div class="card c-cut"><b>Out of scope</b><span>No real-recipient sends, no CRM, no login-gated sites or LinkedIn<br>No crawling or monitoring, no self-tuning ICP</span></div></div>
+  <div class="cell alt"></div>
+</div></div>
+
+<div class="legend">
+  <span><em style="border-color:var(--user)"></em>Users</span>
+  <span><em style="border-color:var(--app)"></em>App logic</span>
+  <span><em style="border-color:var(--rules)"></em>Rules / config</span>
+  <span><em style="border-color:var(--data)"></em>Data / external</span>
+  <span><em style="border-color:var(--human)"></em>Human decision</span>
+  <span><em style="border:2px dashed var(--cut)"></em>Cut / out of scope</span>
+</div>
+
+<div class="flow"><b>Flow:</b> <code>1</code> click Run discovery &rarr; <code>D</code> system finds candidate companies from ICP signals &rarr; <code>2</code> dedupe + enqueue &rarr; <code>3</code> scrape homepage &rarr; <code>4</code> clean + extract &rarr; <code>5</code> rules decide what is missing &rarr; <code>6</code> loop fetches the next page (max 4), then qualifies &rarr; <code>7</code> Hunter finds PoC first, Apollo CSV when Hunter's quota is spent (qualified only) &rarr; <code>6</code> pains + email draft &rarr; <code>9</code> everything logged &rarr; <code>10</code> review UI &rarr; <code>11</code> Growth Lead approves &rarr; <code>12</code> Resend to own inbox. Short-circuits: already certified or not B2B SaaS ends the run early. At the cap, hand to a human.</div>
+</body>
+</html>

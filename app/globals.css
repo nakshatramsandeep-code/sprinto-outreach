@@ -1,0 +1,26 @@
+:root { --bg:#f5f7fb; --card:#fff; --ink:#1b2440; --muted:#5d6785; --line:#dfe4f0; --brand:#4a63e0; --ok:#1a8f5a; --warn:#b7791f; --bad:#c0392b; }
+@media (prefers-color-scheme: dark) { :root { --bg:#12162a; --card:#1b2140; --ink:#e8ebf7; --muted:#9aa4c7; --line:#2c3560; --brand:#7c90ff; --ok:#4cc38a; --warn:#e0b04a; --bad:#ff7b6b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, Segoe UI, Arial, sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+h1 { margin:0 0 4px; font-size:24px; } h2 { font-size:17px; margin:24px 0 8px; }
+.sub { color:var(--muted); margin-bottom:16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+button, .btn { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+button.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); }
+button.danger { background:var(--bad); }
+button:disabled { opacity:.5; cursor:not-allowed; }
+input, textarea { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
+textarea { min-height:220px; }
+table { width:100%; border-collapse:collapse; }
+th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:13px; }
+.chip { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid currentColor; }
+.chip.qualified { color:var(--ok); } .chip.qualified_flagged, .chip.manual_review { color:var(--warn); }
+.chip.disqualified, .chip.failed { color:var(--bad); } .chip.queued, .chip.running { color:var(--muted); }
+.muted { color:var(--muted); } .small { font-size:13px; }
+pre { white-space:pre-wrap; word-break:break-word; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; margin:6px 0 0; }
+.flag { display:inline-block; font-size:12px; color:var(--warn); margin-right:6px; }
+a { color:var(--brand); }
+@media (max-width: 640px) { .hide-sm { display:none; } }
