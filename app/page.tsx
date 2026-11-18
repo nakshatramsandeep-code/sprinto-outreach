@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getKey, setKey } from "@/lib/client";
+import { api } from "@/lib/client";
 
 type Row = {
   id: number; domain: string; name: string | null; status: string; reason: string | null; rank: number | null;
@@ -14,7 +14,6 @@ export default function Home() {
   const [hunter, setHunter] = useState<{ used: number; limit: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
-  const [key, setKeyState] = useState("");
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -24,7 +23,7 @@ export default function Home() {
     } catch (e) { setError((e as Error).message); }
   }, []);
 
-  useEffect(() => { setKeyState(getKey()); refresh(); }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   async function runDiscovery() {
     setBusy(true); setLog([]);
@@ -61,9 +60,6 @@ export default function Home() {
         <button onClick={runDiscovery} disabled={busy}>{busy ? "Working..." : "Run discovery"}</button>
         <button className="ghost" onClick={refresh} disabled={busy}>Refresh</button>
         {hunter && <span className="muted small">Hunter searches this month: {hunter.used} / {hunter.limit}</span>}
-        <span style={{ flex: 1 }} />
-        <input style={{ maxWidth: 200 }} type="password" placeholder="Access key (if set)" value={key}
-          onChange={(e) => { setKeyState(e.target.value); setKey(e.target.value); }} />
       </div>
 
       {error && (

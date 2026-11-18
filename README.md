@@ -11,7 +11,7 @@ Plan and design: [PLAN.md](PLAN.md) · Component map: [component-map.html](compo
 4. Open http://localhost:3000, press **Run discovery**.
 
 ## Deploy
-Push to Git, import in Vercel, add the same env vars. Set `ACCESS_KEY` so only you can use the app.
+Push to Git, import in Vercel, add the same env vars. `ACCESS_KEY` is optional and currently off for the demo (anyone with the URL can use it, but emails only ever go to `OWNER_EMAIL`). To turn protection back on, set `ACCESS_KEY` in Vercel and re-add an input for it in the UI.
 
 ## Guardrails in the code
 Loop cap (4 extra fetches) and handoff · 60k-token ceiling per company · robots.txt + polite delay + stop on login/CAPTCHA/Cloudflare ·
