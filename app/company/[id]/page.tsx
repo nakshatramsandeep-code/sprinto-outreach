@@ -51,10 +51,13 @@ export default function CompanyPage({ params }: { params: Promise<{ id: string }
   );
 
   return (
-    <main>
-      <Link href="/">← All companies</Link>
+    <>
+    <section className="hero"><div className="wrap">
+      <Link href="/" className="back">← All companies</Link>
       <h1>{c.name ?? c.domain}</h1>
       <div className="sub">{c.domain} · <span className={`chip ${c.status}`}>{c.status.replace("_", " ")}</span> {c.reason && <span className="muted">({c.reason})</span>} · rank {c.rank ?? "-"} · {c.loop_fetches} extra fetches · {c.tokens} tokens</div>
+    </div></section>
+    <main>
       {c.flags?.length > 0 && <div className="card">{c.flags.map((x: string) => <span className="flag" key={x}>⚑ {x}</span>)}</div>}
 
       <h2>1. Why this company</h2>
@@ -103,5 +106,6 @@ export default function CompanyPage({ params }: { params: Promise<{ id: string }
         ))}
       </div>
     </main>
+    </>
   );
 }

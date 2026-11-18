@@ -51,10 +51,12 @@ export default function Home() {
   }
 
   return (
+    <>
+    <section className="hero"><div className="wrap">
+      <h1>Outreach that finds its own <span className="accent">prospects.</span></h1>
+      <p>The system finds companies that fit the ICP, researches them and drafts the email. You review and send. Every email goes to your own inbox only.</p>
+    </div></section>
     <main>
-      <h1>Sprinto Outreach Copilot</h1>
-      <div className="sub">The system finds companies and drafts the email. You review and send. Every email goes to your own inbox only.</div>
-
       <div className="card row">
         <button onClick={runDiscovery} disabled={busy}>{busy ? "Working..." : "Run discovery"}</button>
         <button className="ghost" onClick={refresh} disabled={busy}>Refresh</button>
@@ -64,7 +66,11 @@ export default function Home() {
           onChange={(e) => { setKeyState(e.target.value); setKey(e.target.value); }} />
       </div>
 
-      {error && <div className="card" style={{ borderColor: "var(--bad)" }}>Error: {error}</div>}
+      {error && (
+        <div className="card" style={{ borderColor: "var(--bad)" }}>
+          {error === "unauthorized" ? "Enter your access key in the box above, then press Refresh." : `Error: ${error}`}
+        </div>
+      )}
       {log.length > 0 && <div className="card small"><pre>{log.join("\n")}</pre></div>}
 
       <h2>Companies</h2>
@@ -83,12 +89,13 @@ export default function Home() {
                 </td>
                 <td className="hide-sm small muted">{r.signal ?? "-"}</td>
                 <td>{r.rank ?? "-"}</td>
-                <td><Link className="btn ghost" style={{ background: "transparent", color: "var(--brand)", border: "1px solid var(--line)" }} href={`/company/${r.id}`}>Why</Link></td>
+                <td><Link className="btn ghost" href={`/company/${r.id}`}>Why</Link></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </main>
+    </>
   );
 }

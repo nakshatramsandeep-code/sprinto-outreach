@@ -1,26 +1,60 @@
-:root { --bg:#f5f7fb; --card:#fff; --ink:#1b2440; --muted:#5d6785; --line:#dfe4f0; --brand:#4a63e0; --ok:#1a8f5a; --warn:#b7791f; --bad:#c0392b; }
-@media (prefers-color-scheme: dark) { :root { --bg:#12162a; --card:#1b2140; --ink:#e8ebf7; --muted:#9aa4c7; --line:#2c3560; --brand:#7c90ff; --ok:#4cc38a; --warn:#e0b04a; --bad:#ff7b6b; } }
+/* Visual language adapted from sprinto.com: plum hero, cream page, lime accent, pill buttons, Instrument Sans.
+   No logos or copy taken. Unofficial demo styling. */
+:root {
+  --plum:#650A41; --plum-dark:#4d0732; --cream:#F6F5F2; --lime:#DCF07F; --navy:#0B1320; --gray:#49505B;
+  --card:#ffffff; --line:#D7D1FB; --muted:#6a7280;
+  --ok:#2f7d4f; --warn:#b4660a; --bad:#b3261e;
+}
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, Segoe UI, Arial, sans-serif; }
-main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
-h1 { margin:0 0 4px; font-size:24px; } h2 { font-size:17px; margin:24px 0 8px; }
-.sub { color:var(--muted); margin-bottom:16px; }
-.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+html { background: var(--cream); }
+body { margin:0; background:var(--cream); color:var(--navy); font-family: var(--font-sans), "Instrument Sans", system-ui, Segoe UI, Arial, sans-serif; font-size:16px; line-height:1.5; }
+
+/* top bar + hero */
+.topbar { background:var(--plum); color:var(--cream); padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+.topbar .brand { font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:15px; }
+.topbar .brand span { color:var(--lime); }
+.hero { background:var(--plum); color:var(--cream); padding:28px 20px 44px; }
+.hero .wrap { max-width:1100px; margin:0 auto; }
+.hero h1 { font-weight:500; font-size:clamp(28px,5vw,46px); line-height:1.1; letter-spacing:-.02em; margin:0 0 12px; max-width:760px; }
+.hero .accent { color:var(--lime); }
+.hero p, .hero .sub { color:#f0dbe6; max-width:680px; margin:0; font-size:17px; }
+.hero .back { color:var(--lime); text-decoration:none; display:inline-block; margin-bottom:14px; font-size:15px; }
+.hero span.chip { color:var(--lime); border-color:var(--lime); }
+.hero .muted { color:#e6c9d8; }
+.hero .flag { color:var(--lime); }
+
+main { max-width:1100px; margin:0 auto; padding:24px 16px 56px; }
+h2 { font-size:20px; font-weight:600; margin:28px 0 10px; letter-spacing:-.01em; }
+.sub { color:var(--muted); }
+
+.card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:14px; }
 .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-button, .btn { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
-button.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); }
-button.danger { background:var(--bad); }
+
+button, .btn { background:var(--plum); color:#fff; border:0; border-radius:100px; padding:11px 22px; font:inherit; font-weight:500; cursor:pointer; text-decoration:none; display:inline-block; transition:background .15s; }
+button:hover:not(:disabled), .btn:hover { background:var(--plum-dark); }
+button.ghost, .btn.ghost { background:#fff; color:var(--plum); border:1px solid var(--line); }
+button.ghost:hover:not(:disabled), .btn.ghost:hover { background:var(--cream); }
+button.danger { background:#fff; color:var(--bad); border:1px solid #efc4c0; }
 button:disabled { opacity:.5; cursor:not-allowed; }
-input, textarea { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
-textarea { min-height:220px; }
+button:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline:3px solid var(--lime); outline-offset:2px; box-shadow:0 0 0 5px var(--plum); }
+
+input, textarea { background:#fff; color:var(--navy); border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit; width:100%; }
+textarea { min-height:230px; }
+
 table { width:100%; border-collapse:collapse; }
-th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
-th { color:var(--muted); font-weight:600; font-size:13px; }
-.chip { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid currentColor; }
+th, td { text-align:left; padding:12px 12px; border-bottom:1px solid #ece9fb; vertical-align:top; }
+th { color:var(--muted); font-weight:500; font-size:13px; text-transform:uppercase; letter-spacing:.06em; }
+tbody tr:hover { background:#faf9ff; }
+
+.chip { display:inline-block; padding:2px 12px; border-radius:100px; font-size:12.5px; font-weight:600; border:1px solid currentColor; text-transform:capitalize; }
 .chip.qualified { color:var(--ok); } .chip.qualified_flagged, .chip.manual_review { color:var(--warn); }
 .chip.disqualified, .chip.failed { color:var(--bad); } .chip.queued, .chip.running { color:var(--muted); }
-.muted { color:var(--muted); } .small { font-size:13px; }
-pre { white-space:pre-wrap; word-break:break-word; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; margin:6px 0 0; }
-.flag { display:inline-block; font-size:12px; color:var(--warn); margin-right:6px; }
-a { color:var(--brand); }
-@media (max-width: 640px) { .hide-sm { display:none; } }
+
+.muted { color:var(--muted); } .small { font-size:13.5px; }
+pre { white-space:pre-wrap; word-break:break-word; background:var(--cream); border:1px solid var(--line); border-radius:12px; padding:12px; font-size:12.5px; margin:8px 0 0; }
+.flag { display:inline-block; font-size:12.5px; color:var(--warn); margin-right:8px; }
+a { color:var(--plum); }
+details { padding:4px 0; border-bottom:1px solid #ece9fb; } summary { cursor:pointer; }
+
+.footer { text-align:center; color:var(--muted); font-size:13px; padding:0 16px 32px; }
+@media (max-width: 640px) { .hide-sm { display:none; } .hero { padding:22px 16px 34px; } }
