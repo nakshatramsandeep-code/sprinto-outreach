@@ -11,6 +11,8 @@ export type Fields = {
   funding_stage: Evidence<string>;
   open_roles: Evidence<number>;
   enterprise_signal: Evidence<boolean>;
+  // Structured (from a public job-board API, not the model): titles of open compliance/security roles.
+  compliance_hiring: Evidence<string>;
 };
 
 export const emptyEvidence = <T,>(): Evidence<T> => ({ value: null, quote: null, url: null });
@@ -23,6 +25,7 @@ export const emptyFields = (): Fields => ({
   funding_stage: emptyEvidence(),
   open_roles: emptyEvidence(),
   enterprise_signal: emptyEvidence(),
+  compliance_hiring: emptyEvidence(),
 });
 
 // Raw shape the model returns for one page.

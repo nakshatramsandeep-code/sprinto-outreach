@@ -12,12 +12,12 @@ export type Draft = {
 
 export type Validation = { ok: boolean; problems: string[] };
 
-const EVIDENCE_KEYS = ["company_name", "is_b2b_saas", "buyer", "funding_stage", "open_roles", "enterprise_signal", "discovery_signal", "certifications"] as const;
+const EVIDENCE_KEYS = ["company_name", "is_b2b_saas", "buyer", "funding_stage", "open_roles", "enterprise_signal", "compliance_hiring", "discovery_signal", "certifications"] as const;
 
 // Quote text available as evidence for the writer (only verified quotes).
 export function evidenceMap(fields: Fields, discoverySignal?: string | null): Record<string, string> {
   const m: Record<string, string> = {};
-  for (const k of ["company_name", "is_b2b_saas", "buyer", "funding_stage", "open_roles", "enterprise_signal"] as const) {
+  for (const k of ["company_name", "is_b2b_saas", "buyer", "funding_stage", "open_roles", "enterprise_signal", "compliance_hiring"] as const) {
     const e = fields[k];
     if (e.value !== null && e.quote) m[k] = `${String(e.value)} - "${e.quote}"`;
   }

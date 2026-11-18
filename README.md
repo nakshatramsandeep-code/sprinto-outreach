@@ -17,3 +17,8 @@ Push to Git, import in Vercel, add the same env vars. Set `ACCESS_KEY` so only y
 Loop cap (4 extra fetches) and handoff · 60k-token ceiling per company · robots.txt + polite delay + stop on login/CAPTCHA/Cloudflare ·
 private-address (SSRF) block · quotes must appear in the page text · hallucinated domains rejected · Hunter quota counter (25/month) ·
 email validator (name, grounded hook, length, no placeholders) · recipient hardcoded to `OWNER_EMAIL` · atomic send claim (no double send) · optional `ACCESS_KEY`.
+
+## Crawler-style upgrades (still single-fetch, no general crawler)
+- **Sitemap lookup** (`lib/sitemap.ts`): reads the site's own `sitemap.xml` (via robots.txt, 7-day cache) to find the exact `/security`, `/careers`, `/pricing` pages instead of guessing. Only runs when the loop needs another page. Guessing is switched off when a sitemap exists.
+- **Job-board APIs** (`lib/ats.ts`): for the stage check, tries Greenhouse / Lever / Ashby public JSON APIs first. Gives an exact open-role count plus compliance/security job titles (`compliance_hiring` evidence). Tokens come from the company's own links; a guessed Greenhouse token is accepted only if the board name matches. Falls back to scraping the careers page.
+- Topic matching is strict: a page counts as the security page only if the path segment IS `security` / `trust-center` etc., not a product page that merely contains the word.

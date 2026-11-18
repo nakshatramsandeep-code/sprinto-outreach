@@ -2,6 +2,8 @@ import { CONFIG, type Status } from "./config";
 import { q, logStep } from "./db";
 import { getPage, FetchError, type Page } from "./fetcher";
 import { pickCandidateUrls } from "./clean";
+import { loadSitemapUrls, pickFromSitemap } from "./sitemap";
+import { findJobs } from "./ats";
 import { extractFromText } from "./extract";
 import { emptyFields, mergeExtraction, type Fields } from "./fields";
 import { decide, newLoopState, type Topic } from "./loop";
@@ -55,11 +57,40 @@ export async function runCompany(id: number): Promise<{ status: Status; reason: 
 
     // ---- 3. the loop: code decides whether we know enough ----
     const fetched = new Set<string>([homeUrl]);
+    const allLinks = [...home.links];
+    let sitemap: string[] | null = null; // loaded lazily, only if the loop needs another page
+    let atsTried = false;
     let decision = decide(state);
     let guard = 0;
     while (decision.action === "fetch" && guard++ < 12) {
       const topic = decision.topic;
-      const candidates = pickCandidateUrls(homeUrl, home.links, topic).filter((u) => !fetched.has(u));
+
+      // Stage check, rung 0: the company's public job-board API (official, structured). Not a scrape, no fetch spent.
+      if (topic === "stage" && !atsTried) {
+        atsTried = true;
+        const jobs = await findJobs(company.domain, company.name ?? company.domain, allLinks).catch(() => null);
+        if (jobs) {
+          const label = `${jobs.count} open roles on the ${jobs.provider} job board`;
+          fields.open_roles = { value: jobs.count, quote: label, url: jobs.url };
+          if (jobs.complianceTitles.length) {
+            fields.compliance_hiring = { value: jobs.complianceTitles.join("; "), quote: jobs.complianceTitles[0], url: jobs.url };
+          }
+          state.fields = fields;
+          state.tried.stage++;
+          await logStep(id, "ats", { provider: jobs.provider, token: jobs.token, open_roles: jobs.count, compliance_titles: jobs.complianceTitles, url: jobs.url });
+          decision = decide(state);
+          continue;
+        }
+        await logStep(id, "ats_none", { note: "no public job board found, falling back to careers page" });
+      }
+
+      // Rung 1: the site's own sitemap tells us which pages really exist (fewer wasted fetches).
+      if (sitemap === null) {
+        sitemap = await loadSitemapUrls(company.domain).catch(() => []);
+        await logStep(id, "sitemap", { urls: sitemap.length });
+      }
+      const fromMap = pickFromSitemap(sitemap, homeUrl, topic);
+      const candidates = [...new Set([...fromMap, ...pickCandidateUrls(homeUrl, allLinks, topic, { guess: sitemap.length < 10 })])].filter((u) => !fetched.has(u));
       if (candidates.length === 0) {
         state.tried[topic] = 99; // nothing left to try for this topic, move on without spending a fetch
         await logStep(id, "loop_skip", { topic, why: "no candidate page" });
@@ -73,6 +104,7 @@ export async function runCompany(id: number): Promise<{ status: Status; reason: 
       try {
         const page = await getPage(url, { keepShort: TOPIC_KEEP_SHORT[topic] });
         if (topic === "cert") state.securityPageRead = true;
+        allLinks.push(...page.links);
         const raw = await extractFromText(page.text, url, meter);
         fields = mergeExtraction(fields, raw, page.text, url);
         state.fields = fields;

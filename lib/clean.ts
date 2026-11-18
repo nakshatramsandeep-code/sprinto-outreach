@@ -77,12 +77,21 @@ export const TOPIC_PATHS: Record<string, { keywords: string[]; guesses: string[]
   saas: { keywords: ["product", "platform", "about", "solutions"], guesses: ["/product", "/about"] },
 };
 
+// A path segment counts as a topic page only when it IS the topic ("security", "trust-center"),
+// not merely contains the word ("ai-security-posture-management" is a product page, not a trust page).
+export function isTopicSegment(seg: string, kw: string): boolean {
+  const s = seg.toLowerCase();
+  return s === kw || s === `${kw}-center` || s === `${kw}-centre` || s === `${kw}-and-compliance` || s === `${kw}-compliance`;
+}
+
 export function pickCandidateUrls(
   base: string,
   links: { href: string; label: string }[],
   topic: keyof typeof TOPIC_PATHS,
+  opts: { guess?: boolean } = {},
 ): string[] {
   const { keywords, guesses } = TOPIC_PATHS[topic];
+  const guessAllowed = opts.guess ?? true; // false when a sitemap already told us what pages exist
   const origin = new URL(base).origin;
   const host = new URL(base).hostname.replace(/^www\./, "");
   const found: string[] = [];
@@ -91,14 +100,15 @@ export function pickCandidateUrls(
       try {
         const u = new URL(l.href, base);
         if (u.hostname.replace(/^www\./, "") !== host) continue;
-        const hay = (u.pathname + " " + l.label).toLowerCase();
-        if (hay.includes(kw) && u.pathname.length > 1 && u.pathname.split("/").length <= 3) {
-          found.push(u.origin + u.pathname);
-        }
+        const segs = u.pathname.split("/").filter(Boolean);
+        if (segs.length === 0 || segs.length > 2) continue;
+        const pathMatch = segs.some((s) => isTopicSegment(s, kw));
+        const labelMatch = l.label.trim().toLowerCase() === kw && segs.length === 1; // nav link literally labelled "Security"
+        if (pathMatch || labelMatch) found.push(u.origin + u.pathname);
       } catch {}
     }
   }
-  const all = [...found, ...guesses.map((g) => origin + g)];
+  const all = [...found, ...(guessAllowed ? guesses.map((g) => origin + g) : [])];
   return [...new Set(all)];
 }
 

@@ -181,3 +181,29 @@ export async function getPage(url: string, opts: { keepShort?: boolean } = {}): 
   );
   return page;
 }
+
+// ---- Non-HTML fetch for sitemaps: same guardrails (public host, robots.txt, polite delay, timeout, size cap) ----
+export async function fetchRaw(url: string, maxBytes = 3_000_000): Promise<string | null> {
+  await assertPublic(url);
+  if (!(await robotsAllows(url))) throw new FetchError("robots_disallowed", url);
+  await politeWait(new URL(url).hostname);
+  try {
+    const res = await fetch(url, {
+      headers: { "user-agent": CONFIG.scrape.userAgent, accept: "application/xml,text/xml,text/plain,*/*" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(CONFIG.scrape.timeoutMs),
+    });
+    if (isPrivateHost(new URL(res.url).hostname) || !res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return new TextDecoder().decode(buf.slice(0, maxBytes));
+  } catch {
+    return null;
+  }
+}
+
+// Sitemap URLs the site itself declares in robots.txt (empty if none).
+export async function sitemapsFor(origin: string): Promise<string[]> {
+  await robotsAllows(origin + "/"); // loads and caches robots.txt for this origin
+  const r = robotsCache.get(origin);
+  return (r && typeof r.getSitemaps === "function" ? r.getSitemaps() : []) ?? [];
+}

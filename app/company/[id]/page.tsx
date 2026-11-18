@@ -62,7 +62,7 @@ export default function CompanyPage({ params }: { params: Promise<{ id: string }
         <div className="small muted">Discovered via {c.discovery?.source}: “{c.discovery?.quote}” {c.discovery?.url && <a href={c.discovery.url} target="_blank" rel="noreferrer">source</a>}</div>
         <table style={{ marginTop: 8 }}><tbody>
           {ev("B2B SaaS", f.is_b2b_saas)}{ev("Buyer", f.buyer)}{ev("Funding stage", f.funding_stage)}
-          {ev("Open roles", f.open_roles)}{ev("Enterprise signal", f.enterprise_signal)}
+          {ev("Open roles", f.open_roles)}{ev("Compliance / security hiring", f.compliance_hiring)}{ev("Enterprise signal", f.enterprise_signal)}
           <tr><td>Certifications</td><td>{f.certifications?.length ? f.certifications.map((x: any) => x.name).join(", ") : <span className="muted">none found</span>}</td><td className="small muted">{f.certifications?.[0]?.quote}</td></tr>
         </tbody></table>
       </div>
