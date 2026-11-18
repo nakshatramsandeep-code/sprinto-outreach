@@ -18,17 +18,19 @@ export type Decision =
   | { action: "manual_review"; reason: string }
   | { action: "qualify"; flags: string[]; rank: number };
 
-export function stageKnown(f: Fields): boolean {
+export function stageKnown(f: Fields, minRoles: number = CONFIG.icp.minOpenRolesForStage): boolean {
   return (
     f.funding_stage.value !== null ||
-    (f.open_roles.value !== null && f.open_roles.value >= CONFIG.icp.minOpenRolesForStage) ||
+    (f.open_roles.value !== null && f.open_roles.value >= minRoles) ||
     f.enterprise_signal.value === true
   );
 }
 
-export function decide(s: LoopState): Decision {
+export function decide(s: LoopState, opts: { cap?: number; minRoles?: number } = {}): Decision {
   const f = s.fields;
-  const left = CONFIG.loop.maxExtraFetches - s.fetchesUsed;
+  const cap = opts.cap ?? CONFIG.loop.maxExtraFetches;
+  const minRoles = opts.minRoles ?? CONFIG.icp.minOpenRolesForStage;
+  const left = cap - s.fetchesUsed;
   const L = CONFIG.loop;
 
   // Short-circuit 1: already certified ends the assessment.
@@ -49,18 +51,18 @@ export function decide(s: LoopState): Decision {
   }
 
   // Stage: up to two tries.
-  if (!stageKnown(f) && left > 0 && s.tried.stage < L.stageTries) {
+  if (!stageKnown(f, minRoles) && left > 0 && s.tried.stage < L.stageTries) {
     return { action: "fetch", topic: "stage", why: "stage signal missing (funding, open roles, enterprise tier)" };
   }
 
   // Enough, or cap reached. Qualify, flag what is still unknown.
   const flags: string[] = [];
   if (!s.securityPageRead) flags.push("cert_unconfirmed");
-  if (!stageKnown(f)) flags.push("stage_unknown");
+  if (!stageKnown(f, minRoles)) flags.push("stage_unknown");
   if (left <= 0 && flags.length > 0) flags.push("fetch_cap_reached");
 
   let rank = 100 - 25 * flags.filter((x) => x !== "fetch_cap_reached").length;
-  if ((f.open_roles.value ?? 0) >= CONFIG.icp.minOpenRolesForStage) rank += 10;
+  if ((f.open_roles.value ?? 0) >= minRoles) rank += 10;
   if (f.funding_stage.value) rank += 5;
   if (f.enterprise_signal.value) rank += 5;
   return { action: "qualify", flags, rank: Math.max(0, rank) };

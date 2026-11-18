@@ -22,3 +22,16 @@ email validator (name, grounded hook, length, no placeholders) · recipient hard
 - **Sitemap lookup** (`lib/sitemap.ts`): reads the site's own `sitemap.xml` (via robots.txt, 7-day cache) to find the exact `/security`, `/careers`, `/pricing` pages instead of guessing. Only runs when the loop needs another page. Guessing is switched off when a sitemap exists.
 - **Job-board APIs** (`lib/ats.ts`): for the stage check, tries Greenhouse / Lever / Ashby public JSON APIs first. Gives an exact open-role count plus compliance/security job titles (`compliance_hiring` evidence). Tokens come from the company's own links; a guessed Greenhouse token is accepted only if the board name matches. Falls back to scraping the careers page.
 - Topic matching is strict: a page counts as the security page only if the path segment IS `security` / `trust-center` etc., not a product page that merely contains the word.
+
+## Pages
+- **Home**: KPIs (drafts ready, sent this week, reply rate, minutes per company, needs you), today's run funnel, recent activity.
+- **Review queue**: every point that needs a human (H2 qualification, H3 contact, H4 angle, H5 send, H7 system), with the evidence beside the decision; keyboard j/k/a/s/e; unanswered items auto-skip after 7 days; every decision goes to the audit log.
+- **Outreach / Accounts**: all drafts and all companies; an account page shows the score breakdown ("why this score"), evidence with quotes, contact ranking, editable drafts and the full decision trail.
+- **Pipeline**: ready to send, awaiting reply, replied, meeting, no reply; follow-up queue at day 3/7/14 with "Draft now"; open rate once the Resend webhook is set.
+- **Discover**: candidates from hiring posts, Google Search through Gemini, and funding-news RSS feeds; a site is used only once its homepage is verified; auto-queue toggle.
+- **Analytics**: minutes per company, rewrite rate vs the 20%/50% limits, contact accuracy vs 60%, needs-human rate, cost per company, funnel, drop reasons, qualification rate by source; shows a banner if a kill criterion is reached.
+- **ICP & Rules**: editable ICP, score weights (must total 100), thresholds, caps, email rules; versioned in Neon, live "which accounts would move" preview, reset to defaults.
+- **Settings**: integration status, demo mode (locked), Sprinto sender profile (proof points need a source page), audit log.
+- Scoring is deterministic code (0-100, tiers A/B/C/D), not a model opinion, so every point can be explained and re-computed.
+- Optional: set `RESEND_WEBHOOK_SECRET` and point a Resend webhook at `/api/webhooks/resend` to record opens.
+- Not included: HubSpot sync, scheduled (cron) runs, Apollo (planned for when Hunter's monthly searches run out).

@@ -12,20 +12,20 @@ export async function hunterUsed(): Promise<number> {
 }
 
 // Reserve one search BEFORE calling, so a crash can never let us exceed the free tier.
-async function reserve(): Promise<boolean> {
+async function reserve(cap: number): Promise<boolean> {
   const r = await q<{ value: number }>(
     `INSERT INTO counters (key, value) VALUES ($1, 1)
      ON CONFLICT (key) DO UPDATE SET value = counters.value + 1
      WHERE counters.value < $2
      RETURNING value`,
-    [monthKey(), CONFIG.budget.hunterMonthlyLimit],
+    [monthKey(), cap],
   );
   return r.length > 0;
 }
 
-export async function hunterDomainSearch(domain: string): Promise<HunterPerson[]> {
+export async function hunterDomainSearch(domain: string, cap: number = CONFIG.budget.hunterMonthlyLimit): Promise<HunterPerson[]> {
   if (!process.env.HUNTER_API_KEY) throw new Error("HUNTER_API_KEY is not set");
-  if (!(await reserve())) throw new HunterQuotaError("monthly Hunter limit reached");
+  if (!(await reserve(cap))) throw new HunterQuotaError("monthly Hunter limit reached");
 
   const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&limit=${CONFIG.budget.hunterResultLimit}`;
   const res = await fetch(url, {

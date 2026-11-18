@@ -1,97 +1,90 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/client";
+import { PageHead, useApi, useRunner, LogBox, Tier, ago } from "@/components/ui";
 
-type Row = {
-  id: number; domain: string; name: string | null; status: string; reason: string | null; rank: number | null;
-  flags: string[]; signal: string | null; draft_id: number | null; review_status: string | null;
+type Home = {
+  kpis: { draftsReady: number; sentWeek: number; replyRate: number; minutesPerCompany: number; needsYou: number };
+  funnel: { found: number; scraped: number; qualified: number; contact: number; drafts: number; sent: number };
+  lastRun: string | null;
+  activity: { id: number; step: string; detail: Record<string, any>; created_at: string; company_id: number; company: string }[];
+  waiting: { id: number; company_id: number; subject: string; kind: string; name: string | null; domain: string; score: number | null; tier: string | null; fn: string | null; ln: string | null }[];
 };
 
+function describe(a: Home["activity"][number]): string {
+  const d = a.detail;
+  if (a.step === "score") return `score ${d.score} · tier ${d.tier}`;
+  if (a.step === "decision") return d.outcome === "qualified" ? `qualified (rank ${d.rank})` : `${d.outcome}: ${d.reason}`;
+  if (a.step === "contact") return d.chosen ? `contact: ${d.chosen.first_name} ${d.chosen.last_name ?? ""}, ${d.chosen.position}` : `contact: none auto-accepted (${d.found} found)`;
+  if (a.step === "draft") return `draft written, hook: ${d.hook_field}`;
+  if (a.step === "send") return `sent to demo inbox${d.edited ? " (edited)" : ""}`;
+  if (a.step === "scrape_failed") return `could not read site: ${d.reason}`;
+  return a.step;
+}
+
 export default function Home() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [hunter, setHunter] = useState<{ used: number; limit: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
-  const [error, setError] = useState("");
-
-  const refresh = useCallback(async () => {
-    try {
-      const r = await api<{ companies: Row[]; hunter: { used: number; limit: number } }>("/api/companies");
-      setRows(r.companies); setHunter(r.hunter); setError("");
-    } catch (e) { setError((e as Error).message); }
-  }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  async function runDiscovery() {
-    setBusy(true); setLog([]);
-    const say = (s: string) => setLog((l) => [...l, s]);
-    try {
-      say("Searching the web for companies that match the ICP...");
-      const d = await api<{ companyIds: number[]; considered: number; rejected: { domain: string; why: string }[]; sourceErrors: string[] }>("/api/discover", { method: "POST", body: {} });
-      say(`Found ${d.considered} candidates, kept ${d.companyIds.length}, rejected ${d.rejected.length}.`);
-      d.sourceErrors?.forEach((s) => say(`  source problem: ${s}`));
-      d.rejected.slice(0, 8).forEach((r) => say(`  rejected ${r.domain}: ${r.why}`));
-      await refresh();
-      // One company at a time, so each call stays short.
-      for (const [i, id] of d.companyIds.entries()) {
-        say(`Researching company ${i + 1} of ${d.companyIds.length}...`);
-        try {
-          const r = await api<{ status: string; reason: string | null }>("/api/run-company", { method: "POST", body: { id } });
-          say(`  -> ${r.status}${r.reason ? ` (${r.reason})` : ""}`);
-        } catch (e) { say(`  -> error: ${(e as Error).message}`); }
-        await refresh();
-      }
-      say("Done.");
-    } catch (e) { setError((e as Error).message); }
-    setBusy(false); refresh();
-  }
+  const { data, reload, error } = useApi<Home>("/api/home");
+  const { busy, log, run, stop } = useRunner(reload);
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const k = data?.kpis;
+  const f = data?.funnel;
+  const steps = f ? [["1 · Found", f.found], ["2 · Scraped", f.scraped], ["3 · Qualified", f.qualified], ["4 · Contact found", f.contact], ["5 · Drafts", f.drafts], ["6 · Sent", f.sent]] as const : [];
 
   return (
     <>
-    <section className="hero"><div className="wrap">
-      <h1>Outreach that finds its own <span className="accent">prospects.</span></h1>
-      <p>The system finds companies that fit the ICP, researches them and drafts the email. You review and send. Every email goes to your own inbox only.</p>
-    </div></section>
-    <main>
-      <div className="card row">
-        <button onClick={runDiscovery} disabled={busy}>{busy ? "Working..." : "Run discovery"}</button>
-        <button className="ghost" onClick={refresh} disabled={busy}>Refresh</button>
-        {hunter && <span className="muted small">Hunter searches this month: {hunter.used} / {hunter.limit}</span>}
-      </div>
+      <PageHead
+        title={<>{greet}. <span className="accent">Here is today.</span></>}
+        sub={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        right={<>
+          <button onClick={() => run("all")} disabled={busy}>{busy ? "Running..." : "Run"}</button>
+          {busy && <button className="ghost" onClick={stop}>Stop</button>}
+        </>}
+      />
+      <main>
+        {error && <div className="card" style={{ borderColor: "var(--bad)" }}>Error: {error}</div>}
+        <LogBox log={log} />
 
-      {error && (
-        <div className="card" style={{ borderColor: "var(--bad)" }}>
-          {error === "unauthorized" ? "Enter your access key in the box above, then press Refresh." : `Error: ${error}`}
+        <div className="grid kpis">
+          <div className="kpi"><div className="label">Drafts ready</div><div className="value">{k?.draftsReady ?? "-"}</div><div className="note">Waiting for your approval</div></div>
+          <div className="kpi"><div className="label">Sent this week</div><div className="value">{k?.sentWeek ?? "-"}</div><div className="note">Approved and sent via Resend</div></div>
+          <div className="kpi"><div className="label">Reply rate</div><div className="value">{k ? `${k.replyRate}%` : "-"}</div><div className="note">Replies / sent, last 7 days</div></div>
+          <div className="kpi"><div className="label">Minutes per company</div><div className="value">{k?.minutesPerCompany ?? "-"}</div><div className="note">vs 15-20 min done by hand</div></div>
+          <div className={`kpi ${k && k.needsYou > 0 ? "warn" : ""}`}><div className="label">Needs you</div><div className="value">{k?.needsYou ?? "-"}</div><div className="note"><Link href="/review">Open checkpoints in the Review queue</Link></div></div>
         </div>
-      )}
-      {log.length > 0 && <div className="card small"><pre>{log.join("\n")}</pre></div>}
 
-      <h2>Companies</h2>
-      <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-        <table>
-          <thead><tr><th>Company</th><th>Status</th><th className="hide-sm">Why it surfaced</th><th>Rank</th><th></th></tr></thead>
-          <tbody>
-            {rows.length === 0 && <tr><td colSpan={5} className="muted">Nothing yet. Press Run discovery.</td></tr>}
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td><b>{r.name ?? r.domain}</b><div className="muted small">{r.domain}</div></td>
-                <td>
-                  <span className={`chip ${r.status}`}>{r.status.replace("_", " ")}</span>
-                  {r.reason && <div className="muted small">{r.reason}</div>}
-                  <div>{r.flags?.map((f) => <span className="flag" key={f}>⚑ {f}</span>)}</div>
-                </td>
-                <td className="hide-sm small muted">{r.signal ?? "-"}</td>
-                <td>{r.rank ?? "-"}</td>
-                <td><Link className="btn ghost" href={`/company/${r.id}`}>Why</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </main>
+        <h2>Today&apos;s run</h2>
+        <div className="grid kpis">
+          {steps.map(([label, n]) => <div className="kpi" key={label}><div className="label">{label}</div><div className="value" style={{ fontSize: 26 }}>{n}</div></div>)}
+        </div>
+        <p className="muted small">Last discovery {data?.lastRun ? `${ago(data.lastRun)} ago` : "never"}. Runs are started with the Run button (no schedule). See the <Link href="/pipeline">pipeline</Link>.</p>
+
+        <div className="split" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div>
+            <h2>Recent activity</h2>
+            <div className="list">
+              {(data?.activity ?? []).length === 0 && <div className="item muted">Nothing yet. Press Run.</div>}
+              {data?.activity.map((a) => (
+                <Link key={a.id} href={`/accounts/${a.company_id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                  <div className="item"><b>{a.company}</b> <span className="muted small">· {describe(a)}</span><span className="muted small right" style={{ float: "right" }}>{ago(a.created_at)}</span></div>
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h2>Drafts waiting for you</h2>
+            <div className="list">
+              {(data?.waiting ?? []).length === 0 && <div className="item muted">No drafts waiting.</div>}
+              {data?.waiting.map((w) => (
+                <Link key={w.id} href={`/accounts/${w.company_id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                  <div className="item"><b>{w.name ?? w.domain}</b> <Tier tier={w.tier} score={w.score} /><div className="small muted">{w.kind !== "first" ? `${w.kind.replace("_", " ")} · ` : ""}{w.subject} {w.fn ? `· to ${w.fn} ${w.ln ?? ""}` : ""}</div></div>
+                </Link>
+              ))}
+            </div>
+            <p><Link className="btn ghost" href="/outreach">Open Outreach</Link></p>
+          </div>
+        </div>
+      </main>
     </>
   );
 }

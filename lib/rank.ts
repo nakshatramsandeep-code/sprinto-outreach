@@ -37,12 +37,22 @@ export function scorePerson(p: HunterPerson, smallCompany: boolean): Ranked {
 }
 
 export const MIN_CONTACT_SCORE = 35;
+export const BEST_MATCH_FLOOR = 20; // below this there is no sensible "best match" to suggest
 
-export function pickContact(people: HunterPerson[], smallCompany: boolean): { chosen: Ranked | null; ranked: Ranked[] } {
+// chosen = clears the auto-accept bar. best = the top candidate even if it does not (a human can confirm it).
+export function pickContact(
+  people: HunterPerson[],
+  smallCompany: boolean,
+  autoAccept: number = MIN_CONTACT_SCORE,
+): { chosen: Ranked | null; best: Ranked | null; ranked: Ranked[] } {
   const ranked = people
     .filter((p) => p.email && p.first_name && p.position) // need a real name and a role
     .map((p) => scorePerson(p, smallCompany))
     .sort((a, b) => b.score - a.score);
   const top = ranked[0];
-  return { chosen: top && top.score >= MIN_CONTACT_SCORE ? top : null, ranked: ranked.slice(0, 5) };
+  return {
+    chosen: top && top.score >= autoAccept ? top : null,
+    best: top && top.score >= BEST_MATCH_FLOOR ? top : null,
+    ranked: ranked.slice(0, 5),
+  };
 }

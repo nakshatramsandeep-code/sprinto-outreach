@@ -53,11 +53,12 @@ export type Status =
   | "running"
   | "qualified"
   | "qualified_flagged"
+  | "maybe"
   | "disqualified"
   | "manual_review"
   | "failed";
 
 export const MODELS = {
   fast: () => process.env.GEMINI_FAST_MODEL || "gemini-3.8-flash",
-  pro: () => process.env.GEMINI_PRO_MODEL || "gemini-4-carbon",
+  pro: () => process.env.GEMINI_PRO_MODEL || "gemini-3.8-flash",
 };

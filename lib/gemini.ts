@@ -10,9 +10,10 @@ export class BudgetError extends Error {
 // Tracks tokens for ONE company so a runaway loop cannot spend without limit.
 export class Meter {
   used = 0;
+  constructor(public max: number = CONFIG.budget.maxTokensPerCompany) {}
   add(n: number) {
     this.used += n;
-    if (this.used > CONFIG.budget.maxTokensPerCompany) throw new BudgetError(this.used);
+    if (this.used > this.max) throw new BudgetError(this.used);
   }
 }
 
@@ -37,6 +38,9 @@ type CallOpts = {
 // One wrapper for every Gemini call: retries on rate limits (free tier), counts tokens.
 export async function gemini(opts: CallOpts): Promise<{ text: string; tokens: number }> {
   let lastErr: unknown;
+  // Extraction and drafting do not need long hidden "thinking": switching it off is ~3x faster and uses far fewer tokens.
+  // If a model rejects the setting we retry without it.
+  let thinkingOff = !opts.search;
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const res = await ai().models.generateContent({
@@ -46,6 +50,7 @@ export async function gemini(opts: CallOpts): Promise<{ text: string; tokens: nu
           systemInstruction: opts.system,
           temperature: opts.temperature ?? 0.2,
           httpOptions: { timeout: opts.search ? 110_000 : 45_000 }, // a hung call must not hang the run
+          ...(thinkingOff ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
           ...(opts.json ? { responseMimeType: "application/json" } : {}),
           ...(opts.search ? { tools: [{ googleSearch: {} }] } : {}),
         },
@@ -57,6 +62,7 @@ export async function gemini(opts: CallOpts): Promise<{ text: string; tokens: nu
       if (e instanceof BudgetError) throw e;
       lastErr = e;
       const msg = String((e as Error)?.message ?? e);
+      if (thinkingOff && /thinking/i.test(msg)) { thinkingOff = false; continue; }
       const retryable = /429|rate|quota|unavailable|503|504|overloaded|deadline|abort|timed? ?out|fetch failed/i.test(msg);
       if (!retryable) break;
       if (attempt < 3) await sleep(2000 * 2 ** attempt); // 2s, 4s, 8s between tries
