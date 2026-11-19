@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { PageHead, useApi, Tier, ago } from "@/components/ui";
+import { PageHead, useApi, Tier, ago, Skeleton } from "@/components/ui";
 
 type D = { id: number; company_id: number; kind: string; subject: string; review_status: string; edited: boolean; created_at: string; sent_at: string | null; name: string | null; domain: string; score: number | null; tier: string | null; fn: string | null; ln: string | null; title: string | null };
 
 export default function Outreach() {
-  const { data, error } = useApi<{ drafts: D[] }>("/api/drafts");
+  const { data, error, loading } = useApi<{ drafts: D[] }>("/api/drafts");
   const [f, setF] = useState("waiting");
   const all = data?.drafts ?? [];
   const match = (d: D, k: string) => k === "all" || (k === "waiting" ? ["pending", "edited"].includes(d.review_status) : d.review_status === k);
@@ -24,7 +24,8 @@ export default function Outreach() {
           <table>
             <thead><tr><th>Company</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={5} className="muted">No drafts here.</td></tr>}
+              {loading && <tr><td colSpan={5}><Skeleton lines={4} height={22} /></td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={5} className="muted">No drafts here.</td></tr>}
               {rows.map((d) => (
                 <tr key={d.id}>
                   <td><b>{d.name ?? d.domain}</b> <Tier tier={d.tier} score={d.score} /></td>

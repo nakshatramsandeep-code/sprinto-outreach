@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client";
-import { PageHead, useApi, useRunner, LogBox, Toggle, ago } from "@/components/ui";
+import { PageHead, useApi, useRunner, LogBox, Toggle, ago, Skeleton } from "@/components/ui";
 
 type Cand = { id: number; name: string; domain: string | null; source: string; signal: string | null; url: string | null; stage: string | null; published_at: string | null; status: string; company_id: number | null; created_at: string };
 type Resp = { items: Cand[]; foundToday: number; waiting: number; queuedTotal: number; autoQueue: boolean; sources: Record<string, string> };
 
 export default function Discover() {
-  const { data, reload, error } = useApi<Resp>("/api/candidates");
+  const { data, reload, error, loading } = useApi<Resp>("/api/candidates");
   const { busy, log, run } = useRunner(reload);
   const [tab, setTab] = useState("new");
   const items = (data?.items ?? []).filter((c) => tab === "all" || (tab === "new" ? ["new", "unresolved"].includes(c.status) : c.status === tab));
@@ -39,7 +39,8 @@ export default function Discover() {
           {[["new", "New"], ["queued", "Queued"], ["all", "All"]].map(([k, l]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}<span className="n">{n(k)}</span></button>)}
         </div>
         <div className="card" style={{ padding: 0 }}>
-          {items.length === 0 && <div className="item muted" style={{ padding: 14 }}>Nothing here. Press Discover now.</div>}
+          {loading && <div style={{ padding: 14 }}><Skeleton lines={4} height={20} /></div>}
+          {!loading && items.length === 0 && <div className="item muted" style={{ padding: 14 }}>Nothing here. Press Discover now.</div>}
           {items.map((c) => (
             <div key={c.id} className="row" style={{ padding: "12px 16px", borderBottom: "1px solid #ece9fb", alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 240 }}>

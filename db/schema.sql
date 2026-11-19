@@ -165,3 +165,16 @@ CREATE TABLE IF NOT EXISTS eval_runs (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS eval_runs_kind_idx ON eval_runs(kind, id);
+
+-- ===== v4: indexes for the list/count queries the pages run on every load =====
+CREATE INDEX IF NOT EXISTS companies_status_idx ON companies(status);
+CREATE INDEX IF NOT EXISTS companies_updated_idx ON companies(updated_at DESC);
+CREATE INDEX IF NOT EXISTS companies_researched_idx ON companies(researched_at);
+CREATE INDEX IF NOT EXISTS companies_source_idx ON companies(source);
+CREATE INDEX IF NOT EXISTS drafts_status_idx ON drafts(review_status, kind);
+CREATE INDEX IF NOT EXISTS drafts_sent_idx ON drafts(sent_at) WHERE review_status = 'sent';
+CREATE INDEX IF NOT EXISTS checkpoints_company_idx ON checkpoints(company_id, status);
+CREATE INDEX IF NOT EXISTS steps_step_idx ON steps(step, created_at DESC);
+CREATE INDEX IF NOT EXISTS candidates_status_idx ON candidates(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS email_events_draft_idx ON email_events(draft_id, type);
+CREATE INDEX IF NOT EXISTS eval_runs_created_idx ON eval_runs(created_at DESC);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { api } from "@/lib/client";
+import { api, fetchCached, peek } from "@/lib/client";
 
 export function PageHead({ title, sub, right, back }: { title: ReactNode; sub?: ReactNode; right?: ReactNode; back?: ReactNode }) {
   return (
@@ -35,14 +35,26 @@ export function ago(iso?: string | null): string {
 }
 
 // Load JSON from an API route; reload() to refresh.
+// Shows the last known data immediately (if this page was visited or prefetched) and refreshes it in the background.
 export function useApi<T>(path: string) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
-    try { setData(await api<T>(path)); setError(""); } catch (e) { setError((e as Error).message); }
+    try { setData(await fetchCached<T>(path)); setError(""); } catch (e) { setError((e as Error).message); }
+    setLoading(false);
   }, [path]);
-  useEffect(() => { reload(); }, [reload]);
-  return { data, error, reload, setData };
+  useEffect(() => {
+    const cached = peek<T>(path);
+    if (cached) { setData(cached); setLoading(false); }
+    reload();
+  }, [path, reload]);
+  return { data, error, reload, setData, loading: loading && data === null && !error };
+}
+
+// Grey shimmer blocks while data is on its way (instead of "-" or a misleading "Nothing yet").
+export function Skeleton({ lines = 3, height = 18 }: { lines?: number; height?: number }) {
+  return <div aria-busy="true" aria-label="Loading">{Array.from({ length: lines }, (_, i) => <div key={i} className="skel" style={{ height, width: `${92 - i * 11}%`, marginBottom: 10 }} />)}</div>;
 }
 
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {

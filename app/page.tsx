@@ -11,6 +11,8 @@ type Home = {
   waiting: { id: number; company_id: number; subject: string; kind: string; name: string | null; domain: string; score: number | null; tier: string | null; fn: string | null; ln: string | null }[];
 };
 
+const Sk = () => <div className="skel" style={{ height: 30, width: 56 }} />;
+
 function describe(a: Home["activity"][number]): string {
   const d = a.detail;
   if (a.step === "score") return `score ${d.score} · tier ${d.tier}`;
@@ -23,7 +25,7 @@ function describe(a: Home["activity"][number]): string {
 }
 
 export default function Home() {
-  const { data, reload, error } = useApi<Home>("/api/home");
+  const { data, reload, error, loading } = useApi<Home>("/api/home");
   const { busy, log, run, stop } = useRunner(reload);
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -46,15 +48,16 @@ export default function Home() {
         <LogBox log={log} />
 
         <div className="grid kpis">
-          <div className="kpi"><div className="label">Drafts ready</div><div className="value">{k?.draftsReady ?? "-"}</div><div className="note">Waiting for your approval</div></div>
-          <div className="kpi"><div className="label">Sent this week</div><div className="value">{k?.sentWeek ?? "-"}</div><div className="note">Approved and sent via Resend</div></div>
-          <div className="kpi"><div className="label">Reply rate</div><div className="value">{k ? `${k.replyRate}%` : "-"}</div><div className="note">Replies / sent, last 7 days</div></div>
-          <div className="kpi"><div className="label">Minutes per company</div><div className="value">{k?.minutesPerCompany ?? "-"}</div><div className="note">vs 15-20 min done by hand</div></div>
-          <div className={`kpi ${k && k.needsYou > 0 ? "warn" : ""}`}><div className="label">Needs you</div><div className="value">{k?.needsYou ?? "-"}</div><div className="note"><Link href="/review">Open checkpoints in the Review queue</Link></div></div>
+          <div className="kpi"><div className="label">Drafts ready</div><div className="value">{k ? k.draftsReady : <Sk />}</div><div className="note">Waiting for your approval</div></div>
+          <div className="kpi"><div className="label">Sent this week</div><div className="value">{k ? k.sentWeek : <Sk />}</div><div className="note">Approved and sent via Resend</div></div>
+          <div className="kpi"><div className="label">Reply rate</div><div className="value">{k ? `${k.replyRate}%` : <Sk />}</div><div className="note">Replies / sent, last 7 days</div></div>
+          <div className="kpi"><div className="label">Minutes per company</div><div className="value">{k ? k.minutesPerCompany : <Sk />}</div><div className="note">vs 15-20 min done by hand</div></div>
+          <div className={`kpi ${k && k.needsYou > 0 ? "warn" : ""}`}><div className="label">Needs you</div><div className="value">{k ? k.needsYou : <Sk />}</div><div className="note"><Link href="/review">Open checkpoints in the Review queue</Link></div></div>
         </div>
 
         <h2>Today&apos;s run</h2>
         <div className="grid kpis">
+          {loading && Array.from({ length: 6 }, (_, i) => <div className="kpi" key={i}><div className="skel" style={{ height: 14, width: "60%", marginBottom: 10 }} /><div className="skel" style={{ height: 26, width: "40%" }} /></div>)}
           {steps.map(([label, n]) => <div className="kpi" key={label}><div className="label">{label}</div><div className="value" style={{ fontSize: 26 }}>{n}</div></div>)}
         </div>
         <p className="muted small">Last discovery {data?.lastRun ? `${ago(data.lastRun)} ago` : "never"}. Runs are started with the Run button (no schedule). See the <Link href="/pipeline">pipeline</Link>.</p>
@@ -63,7 +66,8 @@ export default function Home() {
           <div>
             <h2>Recent activity</h2>
             <div className="list">
-              {(data?.activity ?? []).length === 0 && <div className="item muted">Nothing yet. Press Run.</div>}
+              {loading && <div className="item"><div className="skel" style={{ height: 16 }} /></div>}
+              {!loading && (data?.activity ?? []).length === 0 && <div className="item muted">Nothing yet. Press Run.</div>}
               {data?.activity.map((a) => (
                 <Link key={a.id} href={`/accounts/${a.company_id}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <div className="item"><b>{a.company}</b> <span className="muted small">· {describe(a)}</span><span className="muted small right" style={{ float: "right" }}>{ago(a.created_at)}</span></div>
@@ -74,7 +78,8 @@ export default function Home() {
           <div>
             <h2>Drafts waiting for you</h2>
             <div className="list">
-              {(data?.waiting ?? []).length === 0 && <div className="item muted">No drafts waiting.</div>}
+              {loading && <div className="item"><div className="skel" style={{ height: 16 }} /></div>}
+              {!loading && (data?.waiting ?? []).length === 0 && <div className="item muted">No drafts waiting.</div>}
               {data?.waiting.map((w) => (
                 <Link key={w.id} href={`/accounts/${w.company_id}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <div className="item"><b>{w.name ?? w.domain}</b> <Tier tier={w.tier} score={w.score} /><div className="small muted">{w.kind !== "first" ? `${w.kind.replace("_", " ")} · ` : ""}{w.subject} {w.fn ? `· to ${w.fn} ${w.ln ?? ""}` : ""}</div></div>

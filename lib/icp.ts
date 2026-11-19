@@ -87,6 +87,12 @@ export function validateIcp(c: IcpConfig): string[] {
   return p;
 }
 
+// Batchable form (see qm in lib/db.ts): lets a page read the active ICP in the same round trip as its other queries.
+export const ICP_QUERY: [string, unknown[]] = ["SELECT version, config FROM icp_versions WHERE active ORDER BY version DESC LIMIT 1", []];
+export function parseIcp(rows: { version: number; config: Partial<IcpConfig> }[]): { config: IcpConfig; version: number } {
+  return rows[0] ? { config: withDefaults(rows[0].config), version: rows[0].version } : { config: DEFAULT_ICP, version: 1 };
+}
+
 export async function getIcp(): Promise<{ config: IcpConfig; version: number }> {
   const rows = await q<{ version: number; config: Partial<IcpConfig> }>("SELECT version, config FROM icp_versions WHERE active ORDER BY version DESC LIMIT 1");
   if (rows[0]) return { config: withDefaults(rows[0].config), version: rows[0].version };

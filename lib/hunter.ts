@@ -6,6 +6,8 @@ export class HunterQuotaError extends Error {}
 
 const monthKey = () => `hunter:${new Date().toISOString().slice(0, 7)}`;
 
+export const hunterUsedQuery = (): [string, unknown[]] => ["SELECT value FROM counters WHERE key=$1", [monthKey()]];
+
 export async function hunterUsed(): Promise<number> {
   const r = await q<{ value: number }>("SELECT value FROM counters WHERE key=$1", [monthKey()]);
   return r[0]?.value ?? 0;

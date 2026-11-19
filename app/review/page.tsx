@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client";
-import { PageHead, useApi, Tier, ago } from "@/components/ui";
+import { PageHead, useApi, Tier, ago, Skeleton } from "@/components/ui";
 
 type Item = {
   id: number; kind: "qualification" | "contact" | "angle" | "send" | "system"; reason: string; data: any; created_at: string;
@@ -25,7 +25,7 @@ const TABS: { key: string; label: string; match: (i: Item) => boolean }[] = [
 const REASONS = ["already certified", "not SaaS", "too small", "too large", "other"];
 
 export default function Review() {
-  const { data, reload, error } = useApi<Resp>("/api/review");
+  const { data, reload, error, loading } = useApi<Resp>("/api/review");
   const [tab, setTab] = useState("all");
   const [sel, setSel] = useState<number | null>(null);
   const [msg, setMsg] = useState("");
@@ -93,7 +93,8 @@ export default function Review() {
 
         <div className="split">
           <div className="list">
-            {items.length === 0 && <div className="item muted">Nothing needs you right now.</div>}
+            {loading && <div className="item"><Skeleton lines={4} height={16} /></div>}
+            {!loading && items.length === 0 && <div className="item muted">Nothing needs you right now.</div>}
             {items.map((i) => (
               <div key={i.id} className={`item ${cur?.id === i.id ? "sel" : ""}`} onClick={() => setSel(i.id)}>
                 <div><span className="kind">{CODE[i.kind]}</span><b>{i.company}</b> <span className="muted small right" style={{ float: "right" }}>{ago(i.created_at)}</span></div>

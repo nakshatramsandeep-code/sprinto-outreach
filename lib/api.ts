@@ -1,18 +1,28 @@
 import { checkAccess } from "./auth";
+import { dbStats, type DbStats } from "./db";
 
 type Ctx = { params: Promise<Record<string, string>> };
 type Handler = (req: Request, ctx: Ctx) => Promise<Response | Record<string, unknown> | unknown[]>;
 
 // Every route: optional access-key check, JSON in/out, errors become a clean JSON message.
+// It also times the request and reports database round trips in a Server-Timing header
+// (visible in the browser's network tab, and read by `npm run perf` and the performance tests).
 export function route(fn: Handler) {
   return async (req: Request, ctx: Ctx) => {
     const denied = checkAccess(req);
     if (denied) return denied;
+    const stats: DbStats = { trips: 0, ms: 0 };
+    const t0 = performance.now();
+    const withTiming = (res: Response) => {
+      res.headers.set("Server-Timing", `db;dur=${stats.ms.toFixed(0)};desc="${stats.trips} trips", total;dur=${(performance.now() - t0).toFixed(0)}`);
+      res.headers.set("X-DB-Trips", String(stats.trips));
+      return res;
+    };
     try {
-      const out = await fn(req, ctx);
-      return out instanceof Response ? out : Response.json(out);
+      const out = await dbStats.run(stats, () => fn(req, ctx));
+      return withTiming(out instanceof Response ? out : Response.json(out));
     } catch (e) {
-      return Response.json({ error: (e as Error).message ?? "error" }, { status: 500 });
+      return withTiming(Response.json({ error: (e as Error).message ?? "error" }, { status: 500 }));
     }
   };
 }

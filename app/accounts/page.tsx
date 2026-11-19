@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { PageHead, useApi, StatusChip, Tier, ago } from "@/components/ui";
+import { PageHead, useApi, StatusChip, Tier, ago, Skeleton } from "@/components/ui";
 
 type Row = {
   id: number; domain: string; name: string | null; status: string; reason: string | null; score: number | null; tier: string | null; source: string | null;
@@ -11,7 +11,7 @@ type Row = {
 const FILTERS = ["all", "qualified", "qualified_flagged", "maybe", "disqualified", "manual_review", "queued", "failed"];
 
 export default function Accounts() {
-  const { data, error } = useApi<{ companies: Row[]; hunter: { used: number; limit: number } }>("/api/companies");
+  const { data, error, loading } = useApi<{ companies: Row[]; hunter: { used: number; limit: number } }>("/api/companies");
   const [f, setF] = useState("all");
   const rows = (data?.companies ?? []).filter((r) => f === "all" || r.status === f);
   const count = (s: string) => (data?.companies ?? []).filter((r) => s === "all" || r.status === s).length;
@@ -28,7 +28,8 @@ export default function Accounts() {
           <table>
             <thead><tr><th>Company</th><th>Verdict</th><th className="hide-sm">Why it surfaced</th><th>Score</th><th className="hide-sm">Updated</th><th></th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={6} className="muted">Nothing here yet.</td></tr>}
+              {loading && <tr><td colSpan={6}><Skeleton lines={5} height={22} /></td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={6} className="muted">Nothing here yet.</td></tr>}
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td><b>{r.name ?? r.domain}</b><div className="muted small">{r.domain}</div></td>

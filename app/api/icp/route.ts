@@ -1,14 +1,15 @@
 import { route, bad, readJson } from "@/lib/api";
-import { q } from "@/lib/db";
-import { getIcp, saveIcp, validateIcp, withDefaults, DEFAULT_ICP, activateIcp, STAGES, type IcpConfig } from "@/lib/icp";
+import { q, qm } from "@/lib/db";
+import { getIcp, saveIcp, validateIcp, withDefaults, DEFAULT_ICP, activateIcp, STAGES, ICP_QUERY, parseIcp, type IcpConfig } from "@/lib/icp";
 import { audit } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 export const GET = route(async () => {
-  const { config, version } = await getIcp();
-  const versions = await q("SELECT version, note, active, created_by, created_at FROM icp_versions ORDER BY version DESC LIMIT 30");
-  return { config, version, versions, stages: STAGES };
+  const [icp, versions] = await qm([ICP_QUERY, ["SELECT version, note, active, created_by, created_at FROM icp_versions ORDER BY version DESC LIMIT 30"]]);
+  // first ever load: seed v1 (a write, so it is outside the batch)
+  const { config, version } = icp.length ? parseIcp(icp as never) : await getIcp();
+  return { config, version, versions: icp.length ? versions : await q("SELECT version, note, active, created_by, created_at FROM icp_versions ORDER BY version DESC LIMIT 30"), stages: STAGES };
 });
 
 export const POST = route(async (req) => {

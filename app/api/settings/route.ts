@@ -1,14 +1,18 @@
 import { route, bad, readJson } from "@/lib/api";
-import { q } from "@/lib/db";
+import { qm } from "@/lib/db";
 import { NEWS_FEEDS } from "@/lib/discover";
-import { getAutoQueue, getProfile, setSetting, audit, type SenderProfile } from "@/lib/settings";
+import { setSetting, audit, DEFAULT_PROFILE, type SenderProfile } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 const has = (k: string) => !!process.env[k];
 
 export const GET = route(async () => {
-  const log = await q("SELECT id, actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 12");
+  const [log, settings] = await qm([
+    ["SELECT id, actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 12"],
+    ["SELECT key, value FROM settings WHERE key IN ('auto_queue','sender_profile')"],
+  ]);
+  const get = (k: string) => settings.find((s) => s.key === k)?.value;
   return {
     integrations: [
       { name: "Neon Postgres", ok: has("DATABASE_URL") },
@@ -19,9 +23,9 @@ export const GET = route(async () => {
       { name: "Apollo", ok: false, optional: true, note: "planned: used once Hunter's monthly searches run out" },
     ],
     demo: { on: true, inbox: process.env.OWNER_EMAIL ? process.env.OWNER_EMAIL.replace(/^(.).*(@.*)$/, "$1•••$2") : null },
-    autoQueue: await getAutoQueue(),
+    autoQueue: get("auto_queue") ?? true,
     sources: ["Hacker News: Who is hiring (SOC 2 / compliance)", "Google Search through Gemini (3 signal queries)", ...NEWS_FEEDS.map((f) => f.label)],
-    profile: await getProfile(),
+    profile: (get("sender_profile") as SenderProfile | undefined) ?? DEFAULT_PROFILE,
     log,
   };
 });

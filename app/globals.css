@@ -120,3 +120,8 @@ details { padding:4px 0; border-bottom:1px solid #ece9fb; } summary { cursor:poi
 .mono { font-family: ui-monospace, Consolas, monospace; font-size:12.5px; }
 .nowrap { white-space:nowrap; }
 .right { margin-left:auto; }
+
+/* loading placeholders */
+.skel { background: linear-gradient(90deg, #ece9fb 25%, #f6f4ff 50%, #ece9fb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; border-radius: 8px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }

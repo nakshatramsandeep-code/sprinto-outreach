@@ -1,6 +1,6 @@
-import { q } from "./db";
+import { qm, type Query } from "./db";
 import { phrases } from "./diff";
-import { getIcp, saveIcp, validateIcp, type IcpConfig } from "./icp";
+import { getIcp, saveIcp, validateIcp, ICP_QUERY, parseIcp, type IcpConfig } from "./icp";
 import { audit, getSetting, setSetting } from "./settings";
 
 // ---------------------------------------------------------------------------------------------
@@ -222,33 +222,40 @@ export function stats(d: LearningData) {
 }
 
 // ---- loaders ----
-export async function loadLearningData(): Promise<LearningData> {
-  const sent = (await q<{
-    id: number; score: number | null; tier: string | null; source: string | null; hook_field: string | null; edited: boolean; outcome: SentRow["outcome"];
-    lines: SentRow["lines"] | null; title: string | null; edit_diff: { removed?: string[]; added?: string[]; origWords?: number; finalWords?: number } | null;
-  }>(
-    `SELECT d.id, c.score, c.tier, c.source, d.hook_field, d.edited, d.outcome, c.score_breakdown->'lines' AS lines,
-            c.contact->'chosen'->>'position' AS title, d.edit_diff
-     FROM drafts d JOIN companies c ON c.id = d.company_id WHERE d.kind='first' AND d.review_status='sent'`,
-  )).map((r) => ({
+// Everything the learning engine reads, as batchable queries (see qm): ONE round trip instead of six.
+const LEARNING_QUERIES: Query[] = [
+  [`SELECT d.id, c.score, c.tier, c.source, d.hook_field, d.edited, d.outcome, c.score_breakdown->'lines' AS lines,
+           c.contact->'chosen'->>'position' AS title, d.edit_diff
+    FROM drafts d JOIN companies c ON c.id = d.company_id WHERE d.kind='first' AND d.review_status='sent'`],
+  ["SELECT contact->>'override' AS override, contact->'chosen'->>'position' AS title, contact->>'override_reason' AS reason FROM companies WHERE contact->>'decided_by_human'='true'"],
+  [`SELECT (data->>'score')::int AS score, resolution->>'action' AS action FROM checkpoints
+    WHERE kind='qualification' AND status='resolved' AND data ? 'score' AND resolution->>'action' IN ('qualify','disqualify')`],
+  ["SELECT key, value FROM settings WHERE key IN ('dismissed_suggestions','suggestion_cooldown')"],
+  ICP_QUERY as Query,
+];
+
+export function buildLearningData(sentRows: Record<string, any>[], contactRows: Record<string, any>[], maybeRows: Record<string, any>[]): LearningData {
+  const sent: SentRow[] = sentRows.map((r) => ({
     id: r.id, score: r.score, tier: r.tier, source: r.source, hook: r.hook_field, edited: r.edited, outcome: r.outcome, lines: r.lines ?? [], title: r.title,
     origWords: r.edit_diff?.origWords ?? null, finalWords: r.edit_diff?.finalWords ?? null, removed: r.edit_diff?.removed ?? [], added: r.edit_diff?.added ?? [],
   }));
-  const contacts = (await q<{ override: string | null; title: string | null; reason: string | null }>(
-    "SELECT contact->>'override' AS override, contact->'chosen'->>'position' AS title, contact->>'override_reason' AS reason FROM companies WHERE contact->>'decided_by_human'='true'",
-  )).map((r) => ({ mode: (r.override === "true" ? "override" : "confirmed") as ContactDecision["mode"], title: r.title, reason: r.reason }));
-  const maybes = (await q<{ score: number; action: string }>(
-    `SELECT (data->>'score')::int AS score, resolution->>'action' AS action FROM checkpoints
-     WHERE kind='qualification' AND status='resolved' AND data ? 'score' AND resolution->>'action' IN ('qualify','disqualify')`,
-  )).map((r) => ({ score: r.score, action: r.action as MaybeDecision["action"] }));
+  const contacts: ContactDecision[] = contactRows.map((r) => ({ mode: (r.override === "true" ? "override" : "confirmed") as ContactDecision["mode"], title: r.title, reason: r.reason }));
+  const maybes: MaybeDecision[] = maybeRows.map((r) => ({ score: r.score, action: r.action as MaybeDecision["action"] }));
   return { sent, contacts, maybes };
 }
 
+export async function loadLearningData(): Promise<LearningData> {
+  const [s, c, m] = await qm(LEARNING_QUERIES.slice(0, 3));
+  return buildLearningData(s, c, m);
+}
+
 export async function getLearning() {
-  const { config, version } = await getIcp();
-  const data = await loadLearningData();
-  const dismissed = await getSetting<string[]>("dismissed_suggestions", []);
-  const all = suggest(data, config, await getSetting<Record<string, number>>("suggestion_cooldown", {}));
+  const [s, c, m, settings, icp] = await qm(LEARNING_QUERIES);
+  const { config, version } = parseIcp(icp as never);
+  const data = buildLearningData(s, c, m);
+  const setting = <T,>(key: string, fallback: T): T => (settings.find((x) => x.key === key)?.value as T) ?? fallback;
+  const dismissed = setting<string[]>("dismissed_suggestions", []);
+  const all = suggest(data, config, setting<Record<string, number>>("suggestion_cooldown", {}));
   return { version, stats: stats(data), suggestions: all.filter((s) => !dismissed.includes(s.id)), dismissedCount: all.length - all.filter((s) => !dismissed.includes(s.id)).length };
 }
 

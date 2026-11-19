@@ -1,32 +1,40 @@
-import { q, logStep } from "./db";
-import { getIcp } from "./icp";
+import { q, qm, logStep } from "./db";
+import { getIcp, ICP_QUERY, parseIcp } from "./icp";
 import { draftFollowUp } from "./email";
 import { Meter } from "./gemini";
 import { getProfile, openCheckpoint, audit } from "./settings";
 
 export type DueFollowUp = { company_id: number; company: string; person: string; draft_id: number; sent_at: string; day: number; days_since: number };
 
-// Follow-ups are due at day 3 / 7 / 14 after the first email, if nobody has replied and that day has no draft yet.
-export async function dueFollowUps(): Promise<DueFollowUp[]> {
-  const { config } = await getIcp();
-  const sent = await q<{ id: number; company_id: number; sent_at: string; name: string | null; domain: string; contact: { chosen?: { first_name: string; last_name: string | null } } | null; days: number }>(
-    `SELECT d.id, d.company_id, d.sent_at, c.name, c.domain, c.contact, EXTRACT(DAY FROM now() - d.sent_at)::int AS days
-     FROM drafts d JOIN companies c ON c.id = d.company_id
-     WHERE d.kind='first' AND d.review_status='sent' AND d.outcome IS NULL`,
-  );
-  const existing = await q<{ company_id: number; kind: string }>("SELECT company_id, kind FROM drafts WHERE kind LIKE 'followup_%'");
+type SentRow = { id: number; company_id: number; sent_at: string; name: string | null; domain: string; contact: { chosen?: { first_name: string; last_name: string | null } } | null; days: number };
+
+// Batchable queries (see qm) so the Pipeline page can load this in the same round trip as the rest of its data.
+export const SENT_QUERY: [string, unknown[]] = [
+  `SELECT d.id, d.company_id, d.sent_at, c.name, c.domain, c.contact->'chosen' AS chosen, EXTRACT(DAY FROM now() - d.sent_at)::int AS days
+   FROM drafts d JOIN companies c ON c.id = d.company_id
+   WHERE d.kind='first' AND d.review_status='sent' AND d.outcome IS NULL`, [],
+];
+export const FOLLOWUP_DRAFTS_QUERY: [string, unknown[]] = ["SELECT company_id, kind FROM drafts WHERE kind LIKE 'followup_%'", []];
+
+// Pure: which follow-ups are due (day 3 / 7 / 14 after the first email, no reply, no draft for that day yet).
+export function computeDue(sent: (Omit<SentRow, "contact"> & { chosen?: { first_name: string; last_name: string | null } | null })[], existing: { company_id: number; kind: string }[], followUpDays: number[]): DueFollowUp[] {
   const have = new Set(existing.map((e) => `${e.company_id}:${e.kind}`));
   const due: DueFollowUp[] = [];
   for (const s of sent) {
-    const days = [...config.followUpDays].sort((a, b) => a - b).filter((d) => s.days >= d && !have.has(`${s.company_id}:followup_${d}`));
+    const days = [...followUpDays].sort((a, b) => a - b).filter((d) => s.days >= d && !have.has(`${s.company_id}:followup_${d}`));
     if (!days.length) continue;
     const day = days[days.length - 1]; // the latest step that has come due
     due.push({
       company_id: s.company_id, company: s.name ?? s.domain, day, draft_id: s.id, sent_at: s.sent_at, days_since: s.days,
-      person: s.contact?.chosen ? `${s.contact.chosen.first_name} ${s.contact.chosen.last_name ?? ""}`.trim() : "",
+      person: s.chosen ? `${s.chosen.first_name} ${s.chosen.last_name ?? ""}`.trim() : "",
     });
   }
   return due;
+}
+
+export async function dueFollowUps(): Promise<DueFollowUp[]> {
+  const [sent, existing, icp] = await qm([SENT_QUERY, FOLLOWUP_DRAFTS_QUERY, ICP_QUERY]);
+  return computeDue(sent as never, existing as never, parseIcp(icp as never).config.followUpDays);
 }
 
 export async function createFollowUp(companyId: number, day: number) {
