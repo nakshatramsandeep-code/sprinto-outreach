@@ -9,7 +9,8 @@ const has = (k: string) => !!process.env[k];
 
 export const GET = route(async () => {
   const [log, settings] = await qm([
-    ["SELECT id, actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 12"],
+    // Eval/simulation housekeeping is developer tooling, not a decision about a prospect, so it stays out of this log.
+    ["SELECT id, actor, action, detail, created_at FROM audit_log WHERE action !~* '(eval|simulation)' ORDER BY id DESC LIMIT 12"],
     ["SELECT key, value FROM settings WHERE key IN ('auto_queue','sender_profile')"],
   ]);
   const get = (k: string) => settings.find((s) => s.key === k)?.value;

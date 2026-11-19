@@ -21,8 +21,9 @@ export function StatusChip({ status }: { status: string }) {
 
 export function Tier({ tier, score }: { tier?: string | null; score?: number | null }) {
   if (!tier && score == null) return <span className="muted">-</span>;
-  if (!tier) return <b>{score}</b>; // older accounts have a score but no tier
-  return <span><span className={`tier ${tier}`}>{tier}</span> <b>{score ?? ""}</b></span>;
+  const s = score == null ? null : Math.max(0, Math.min(100, Math.round(score))); // the scale is 0-100: never show more
+  if (!tier) return <b>{s}</b>; // older accounts have a score but no tier
+  return <span><span className={`tier ${tier}`}>{tier}</span> <b>{s ?? ""}</b></span>;
 }
 
 export function ago(iso?: string | null): string {

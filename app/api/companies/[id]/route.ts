@@ -1,6 +1,7 @@
 import { route, bad, idOf } from "@/lib/api";
 import { qm } from "@/lib/db";
 import { ICP_QUERY, parseIcp } from "@/lib/icp";
+import { friendlyError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -16,5 +17,6 @@ export const GET = route(async (_req, ctx) => {
   ]);
   if (!company) return bad("not found", 404);
   const { config, version } = parseIcp(icp as never);
+  if (company.status === "failed" && company.reason) company.reason = friendlyError(company.reason);
   return { company, steps, drafts, draft: drafts.find((d) => d.kind === "first") ?? null, checkpoints, icp: { version, usdPerMillionTokens: config.usdPerMillionTokens } };
 });

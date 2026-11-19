@@ -65,7 +65,7 @@ export function decide(s: LoopState, opts: { cap?: number; minRoles?: number } =
   if ((f.open_roles.value ?? 0) >= minRoles) rank += 10;
   if (f.funding_stage.value) rank += 5;
   if (f.enterprise_signal.value) rank += 5;
-  return { action: "qualify", flags, rank: Math.max(0, rank) };
+  return { action: "qualify", flags, rank: Math.min(100, Math.max(0, rank)) }; // a 0-100 scale never exceeds 100
 }
 
 export const newLoopState = (fields: Fields): LoopState => ({

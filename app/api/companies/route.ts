@@ -2,6 +2,7 @@ import { route } from "@/lib/api";
 import { qm } from "@/lib/db";
 import { hunterUsedQuery } from "@/lib/hunter";
 import { ICP_QUERY, parseIcp } from "@/lib/icp";
+import { friendlyError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -18,5 +19,7 @@ export const GET = route(async () => {
     ICP_QUERY,
   ]);
   const { config } = parseIcp(icp as never);
-  return { companies, hunter: { used: hunter[0]?.value ?? 0, limit: config.hunter.monthlyCap } };
+  // Older failures stored the raw provider error: always show a short human message instead.
+  const tidy = companies.map((c) => (c.status === "failed" && c.reason ? { ...c, reason: friendlyError(c.reason) } : c));
+  return { companies: tidy, hunter: { used: hunter[0]?.value ?? 0, limit: config.hunter.monthlyCap } };
 });

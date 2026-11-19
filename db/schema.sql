@@ -178,3 +178,15 @@ CREATE INDEX IF NOT EXISTS steps_step_idx ON steps(step, created_at DESC);
 CREATE INDEX IF NOT EXISTS candidates_status_idx ON candidates(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS email_events_draft_idx ON email_events(draft_id, type);
 CREATE INDEX IF NOT EXISTS eval_runs_created_idx ON eval_runs(created_at DESC);
+
+-- ===== v5: de-duplication keys =====
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS name_key TEXT;
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS name_key TEXT;
+CREATE INDEX IF NOT EXISTS companies_name_key_idx ON companies(name_key);
+CREATE INDEX IF NOT EXISTS candidates_name_key_idx ON candidates(name_key);
+
+-- v6: scores live on a 0-100 scale; the database refuses anything else.
+ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_score_range;
+ALTER TABLE companies ADD CONSTRAINT companies_score_range CHECK (score IS NULL OR (score BETWEEN 0 AND 100));
+ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_rank_range;
+ALTER TABLE companies ADD CONSTRAINT companies_rank_range CHECK (rank IS NULL OR (rank BETWEEN 0 AND 100));

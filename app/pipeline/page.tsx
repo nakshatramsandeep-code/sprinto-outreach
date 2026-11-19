@@ -19,7 +19,10 @@ export default function Pipeline() {
   const m = data?.metrics;
   const cards = data?.cards ?? [];
 
-  const ready = cards.filter((c) => ["pending", "edited"].includes(c.review_status));
+  // A company appears in ONE column. First emails waiting for approval are "Ready to send"; follow-up drafts (the first email is
+  // already out) are listed with the follow-up queue below instead of a second column.
+  const ready = cards.filter((c) => ["pending", "edited"].includes(c.review_status) && c.kind === "first");
+  const followDrafts = cards.filter((c) => ["pending", "edited"].includes(c.review_status) && c.kind !== "first");
   const sent = cards.filter((c) => c.review_status === "sent" && c.kind === "first");
   const col = {
     awaiting: sent.filter((c) => !c.outcome), replied: sent.filter((c) => c.outcome === "replied"),
@@ -52,8 +55,8 @@ export default function Pipeline() {
         {error && <div className="card" style={{ borderColor: "var(--bad)" }}>Error: {error}</div>}
         <div className="grid kpis">
           <div className="kpi"><div className="label">Qualified</div><div className="value">{m?.qualified ?? "-"}</div></div>
-          <div className="kpi"><div className="label">Contacted</div><div className="value">{m?.contacted ?? "-"}</div></div>
-          <div className="kpi"><div className="label">Open rate</div><div className="value">{m?.openRate == null ? "n/a" : `${m.openRate}%`}</div><div className="note">{m?.openRate == null ? "needs the Resend webhook" : "from Resend events"}</div></div>
+          <div className="kpi"><div className="label">Contacted</div><div className="value">{m?.contacted ?? "-"}</div><div className="note">companies with a first email sent</div></div>
+          {m?.openRate != null && <div className="kpi"><div className="label">Open rate</div><div className="value">{m.openRate}%</div><div className="note">from Resend events</div></div>}
           <div className="kpi"><div className="label">Replied</div><div className="value">{m?.replied ?? "-"}</div></div>
           <div className="kpi"><div className="label">Meetings</div><div className="value">{m?.meetings ?? "-"}</div></div>
           <div className="kpi"><div className="label">Response rate</div><div className="value">{m ? `${m.responseRate}%` : "-"}</div></div>
@@ -63,7 +66,7 @@ export default function Pipeline() {
         <h2>Deals</h2>
         <div className="kanban">
           <div className="col"><h3>Ready to send <span className="pill">{ready.length}</span></h3>
-            {ready.map((c) => <Mini key={c.draft_id} c={c}><div className="small muted">{c.kind === "first" ? "first email" : c.kind.replace("_", " ")}</div></Mini>)}</div>
+            {ready.map((c) => <Mini key={c.draft_id} c={c}><div className="small muted">first email, waiting for your approval</div></Mini>)}</div>
           <div className="col"><h3>Awaiting reply <span className="pill">{col.awaiting.length}</span></h3>
             {col.awaiting.map((c) => <Mini key={c.draft_id} c={c}>
               <div className="row" style={{ marginTop: 6, gap: 6 }}>
@@ -79,7 +82,18 @@ export default function Pipeline() {
           <div className="row small muted"><span>Cadence: day 3, 7 and 14 after the first email, if nobody has replied. Change it on ICP &amp; Rules.</span>
             <button className="right" disabled={!!busy || !data?.followUps.length} onClick={() => draft({ all: true }, "all")}>{busy === "all" ? "Drafting..." : "Draft all due"}</button></div>
           {msg && <div className="small" style={{ margin: "8px 0" }}>{msg}</div>}
-          {(data?.followUps ?? []).length === 0 && <p className="muted">No follow-ups due.</p>}
+          {followDrafts.length > 0 && (
+            <div style={{ margin: "8px 0" }}>
+              <b className="small">Follow-up drafts waiting for your approval</b>
+              {followDrafts.map((c) => (
+                <div className="row cardlet" key={c.draft_id}>
+                  <Link href={`/accounts/${c.company_id}`}><b>{c.company}</b></Link><span className="muted small">{who(c)}</span><span className="pill warn">{c.kind.replace("followup_", "Day ")}</span>
+                  <Link className="btn ghost right" href="/review" style={{ padding: "4px 14px" }}>Review</Link>
+                </div>
+              ))}
+            </div>
+          )}
+          {(data?.followUps ?? []).length === 0 && followDrafts.length === 0 && <p className="muted">No follow-ups due.</p>}
           {data?.followUps.map((f) => (
             <div className="row cardlet" key={`${f.company_id}-${f.day}`}>
               <b>{f.company}</b><span className="muted small">{f.person}</span><span className="pill warn">Day {f.day}</span><span className="muted small">sent {f.days_since}d ago</span>
@@ -87,7 +101,6 @@ export default function Pipeline() {
             </div>
           ))}
         </div>
-        <p className="muted small">HubSpot sync is not part of this build.</p>
       </main>
     </>
   );

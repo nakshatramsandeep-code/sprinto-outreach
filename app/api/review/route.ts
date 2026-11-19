@@ -24,7 +24,8 @@ export const GET = route(async () => {
         ORDER BY k.created_at DESC LIMIT 200`],
       hunterUsedQuery(),
       ICP_QUERY,
-      ["SELECT id, actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 12"],
+      // Eval/simulation housekeeping is developer tooling, not a decision about a prospect, so it stays out of this log.
+      ["SELECT id, actor, action, detail, created_at FROM audit_log WHERE action !~* '(eval|simulation)' ORDER BY id DESC LIMIT 12"],
     ]),
   ]);
   const drafts = items.filter((i) => i.draft_id).map((i) => ({ id: i.draft_id, subject: i.draft_subject, body: i.draft_body, kind: i.draft_kind }));

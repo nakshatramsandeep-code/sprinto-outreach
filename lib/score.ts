@@ -1,4 +1,4 @@
-import type { Fields } from "./fields";
+import { emptyFields, type Fields } from "./fields";
 import type { IcpConfig } from "./icp";
 
 // Deterministic 0-100 score. Code scores, never the model, so every point can be explained and re-computed.
@@ -29,7 +29,9 @@ export function scoreCompany(
   input: { fields: Fields; discovery: DiscoveryInfo; flags: string[]; now?: number },
   cfg: IcpConfig,
 ): ScoreResult {
-  const { fields: f, discovery: d, flags } = input;
+  const { discovery: d, flags } = input;
+  // Accounts researched before newer fields existed may lack some of them: fill any gaps so scoring never crashes.
+  const f: Fields = { ...emptyFields(), ...input.fields };
   const w = cfg.weights;
   const lines: ScoreLine[] = [];
   const add = (key: string, label: string, frac: number, weight: number, why: string) =>

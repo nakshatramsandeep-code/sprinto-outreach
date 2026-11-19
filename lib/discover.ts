@@ -6,6 +6,7 @@ import { normalizeDomain, isBlockedCompany, nameMatches } from "./domain";
 import { getIcp } from "./icp";
 import { getAutoQueue, audit } from "./settings";
 import { friendlyError } from "./errors";
+import { companyKey } from "./dedupe";
 
 export type Source = "hn_hiring" | "gemini_search" | "funding_news";
 export type Candidate = {
@@ -232,7 +233,21 @@ export async function discover(): Promise<DiscoverResult> {
 
   let added = 0, unresolved = 0, alreadySeen = 0;
   for (const c of checked) {
+    const key = companyKey(c.name, c.domain);
     const dkey = c.domain ?? `name:${c.name.toLowerCase()}`;
+    // The same company under another domain, or as a name-only headline next to a resolved site, is ONE company.
+    if (key) {
+      const haveCompany = await q("SELECT 1 FROM companies WHERE name_key=$1 LIMIT 1", [key]);
+      if (haveCompany.length) { alreadySeen++; continue; }
+      const prior = await q<{ id: number; domain: string | null; status: string }>("SELECT id, domain, status FROM candidates WHERE name_key=$1 ORDER BY id LIMIT 1", [key]);
+      if (prior[0]) {
+        if (!prior[0].domain && c.domain && prior[0].status === "unresolved") {
+          // we found the missing website for a headline we already had: upgrade it instead of adding a second row
+          try { await q("UPDATE candidates SET domain=$2, dkey=$2, status='new' WHERE id=$1", [prior[0].id, c.domain]); added++; } catch { alreadySeen++; }
+        } else alreadySeen++;
+        continue;
+      }
+    }
     if (c.domain) {
       const seen = await q("SELECT 1 FROM companies WHERE domain=$1 AND (researched_at IS NULL OR researched_at > now() - ($2 || ' days')::interval) AND status <> 'failed'", [c.domain, String(icp.rerunDays)]);
       if (seen.length) { alreadySeen++; continue; }
@@ -241,9 +256,9 @@ export async function discover(): Promise<DiscoverResult> {
     }
     const status = c.domain ? "new" : "unresolved";
     const r = await q<{ id: number }>(
-      `INSERT INTO candidates (dkey, name, domain, source, signal, url, stage, published_at, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (dkey) DO NOTHING RETURNING id`,
-      [dkey, c.name, c.domain, c.source, c.quote, c.url, c.stage ?? null, c.published_at ?? null, status],
+      `INSERT INTO candidates (dkey, name, domain, source, signal, url, stage, published_at, status, name_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (dkey) DO NOTHING RETURNING id`,
+      [dkey, c.name, c.domain, c.source, c.quote, c.url, c.stage ?? null, c.published_at ?? null, status, key],
     );
     if (r.length) { if (c.domain) added++; else unresolved++; } else alreadySeen++;
   }
@@ -263,21 +278,32 @@ export async function queueNew(dailyCap: number, perRun: number, priority: strin
      ORDER BY COALESCE(array_position($2::text[], source), 99), created_at LIMIT $1`, [room, priority],
   );
   const ids: number[] = [];
-  for (const r of rows) { const cid = await queueCandidate(r.id); if (cid) ids.push(cid); }
+  for (const r of rows) { const res = await queueCandidate(r.id); if (res?.created) ids.push(res.id); }
   return ids;
 }
 
-export async function queueCandidate(candidateId: number, actor = "system"): Promise<number | null> {
+// Returns the company this candidate maps to. `created` is false when we already had that company (same website OR same
+// name under another domain): we link to it instead of adding a duplicate, and never reset a company that was already researched.
+export async function queueCandidate(candidateId: number, actor = "system"): Promise<{ id: number; created: boolean } | null> {
   const c = (await q<{ id: number; name: string; domain: string | null; source: string; signal: string | null; url: string | null; stage: string | null; published_at: string | null; status: string }>(
     "SELECT * FROM candidates WHERE id=$1", [candidateId]))[0];
   if (!c || !c.domain || c.status === "queued") return null;
+  const key = companyKey(c.name, c.domain);
+  const existing = await q<{ id: number }>(
+    "SELECT id FROM companies WHERE domain=$1 OR ($2 <> '' AND name_key=$2) ORDER BY (domain=$1) DESC, id LIMIT 1", [c.domain, key],
+  );
+  if (existing[0]) {
+    await q("UPDATE candidates SET status='queued', company_id=$2 WHERE id=$1", [candidateId, existing[0].id]);
+    await logStep(existing[0].id, "discovery_linked", { candidate: candidateId, source: c.source, note: "same company already known, linked instead of duplicated" });
+    if (actor !== "system") await audit(actor, "queue candidate", { candidate: candidateId, company: existing[0].id, linked: true });
+    return { id: existing[0].id, created: false };
+  }
   const row = await q<{ id: number }>(
-    `INSERT INTO companies (domain, name, status, source, discovery) VALUES ($1,$2,'queued',$3,$4)
-     ON CONFLICT (domain) DO UPDATE SET status='queued', source=$3, discovery=$4, name=$2, updated_at=now() RETURNING id`,
-    [c.domain, c.name, c.source, JSON.stringify({ source: c.source, quote: c.signal, url: c.url, stage: c.stage, published_at: c.published_at })],
+    `INSERT INTO companies (domain, name, status, source, discovery, name_key) VALUES ($1,$2,'queued',$3,$4,$5) RETURNING id`,
+    [c.domain, c.name, c.source, JSON.stringify({ source: c.source, quote: c.signal, url: c.url, stage: c.stage, published_at: c.published_at }), key],
   );
   await q("UPDATE candidates SET status='queued', company_id=$2 WHERE id=$1", [candidateId, row[0].id]);
   await logStep(row[0].id, "discovery", { source: c.source, quote: c.signal, url: c.url, stage: c.stage, published_at: c.published_at });
   if (actor !== "system") await audit(actor, "queue candidate", { candidate: candidateId, company: row[0].id });
-  return row[0].id;
+  return { id: row[0].id, created: true };
 }

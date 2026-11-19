@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { PageHead, useApi, StatusChip, Tier, ago, Skeleton } from "@/components/ui";
+import { api } from "@/lib/client";
 
 type Row = {
   id: number; domain: string; name: string | null; status: string; reason: string | null; score: number | null; tier: string | null; source: string | null;
@@ -11,8 +12,18 @@ type Row = {
 const FILTERS = ["all", "qualified", "qualified_flagged", "maybe", "disqualified", "manual_review", "queued", "failed"];
 
 export default function Accounts() {
-  const { data, error, loading } = useApi<{ companies: Row[]; hunter: { used: number; limit: number } }>("/api/companies");
+  const { data, error, loading, reload } = useApi<{ companies: Row[]; hunter: { used: number; limit: number } }>("/api/companies");
   const [f, setF] = useState("all");
+  const [retrying, setRetrying] = useState<number | null>(null);
+
+  // Failed research (a timeout, an unreachable site) can simply be tried again.
+  async function retry(id: number) {
+    setRetrying(id);
+    try { await api("/api/run-company", { body: { id } }); } catch { /* the row shows the new reason after reload */ }
+    await reload();
+    window.dispatchEvent(new Event("checkpoints-changed"));
+    setRetrying(null);
+  }
   const rows = (data?.companies ?? []).filter((r) => f === "all" || r.status === f);
   const count = (s: string) => (data?.companies ?? []).filter((r) => s === "all" || r.status === s).length;
 
@@ -42,7 +53,10 @@ export default function Accounts() {
                   <td className="hide-sm small muted" style={{ maxWidth: 360 }}>{r.signal ?? "-"}</td>
                   <td><Tier tier={r.tier} score={r.score} /></td>
                   <td className="hide-sm muted small nowrap">{ago(r.updated_at)}</td>
-                  <td><Link className="btn ghost" href={`/accounts/${r.id}`}>Open</Link></td>
+                  <td className="nowrap">
+                    {r.status === "failed" && <button style={{ padding: "6px 16px", marginRight: 6 }} disabled={retrying === r.id} onClick={() => retry(r.id)}>{retrying === r.id ? "Retrying..." : "Retry"}</button>}
+                    <Link className="btn ghost" href={`/accounts/${r.id}`}>Open</Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -70,6 +70,7 @@ export default function Review() {
         if (cur.kind === "send") act("approve", { subject, body });
         else if (cur.kind === "angle") act("confirm");
         else if (cur.kind === "contact" && (cur.data?.best || cur.data?.top?.length)) act("use_best");
+        else if (cur.kind === "qualification" && cur.data?.failed) act("retry");
         else if (cur.kind === "qualification" && cur.reason.includes("maybe band")) act("qualify");
         else if (cur.kind === "system") act("dismiss");
       }
@@ -127,10 +128,11 @@ export default function Review() {
                 {cur.kind === "qualification" && (<>
                   <p className="small muted">This checkpoint always needs an explicit choice.</p>
                   <div className="row">
+                    {cur.data?.failed && <button disabled={busy} onClick={() => act("retry")}>Retry</button>}
                     {cur.reason.includes("maybe band") && <button disabled={busy} onClick={() => act("qualify")}>Qualify anyway</button>}
                     <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ width: "auto", padding: 9, borderRadius: 12, border: "1px solid var(--line)" }}>{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
                     <button className="danger" disabled={busy} onClick={() => act("disqualify", { reason })}>Disqualify</button>
-                    <button className="ghost" disabled={busy} onClick={() => act("retry")}>Retry</button>
+                    {!cur.data?.failed && <button className="ghost" disabled={busy} onClick={() => act("retry")}>Retry</button>}
                     <button className="ghost" disabled={busy} onClick={() => act("skip")}>Skip</button>
                   </div>
                   <div className="row" style={{ marginTop: 10 }}>

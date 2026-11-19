@@ -115,7 +115,9 @@ export default function AccountPage({ params }: { params: Promise<{ id: string }
               {sb.penalties.map((p: any, i: number) => <tr key={i}><td>Penalty</td><td className="nowrap" style={{ color: "var(--bad)" }}><b>-{p.pts}</b></td><td></td><td className="small muted">{p.label}</td></tr>)}
             </tbody></table>
             <div className="small muted" style={{ marginTop: 6 }}>Scored by code from the evidence below with ICP version {c.icp_version ?? d.icp.version}. Change the weights on the ICP &amp; Rules page.</div>
-          </>) : <span className="muted">No score yet (the company stopped before scoring: {c.reason ?? c.status}).</span>}
+          </>) : c.score != null
+            ? <span className="muted">Scored {Math.min(100, c.score)} / 100 before score breakdowns existed. Press Re-run to see how it is made up.</span>
+            : <span className="muted">No score yet: {c.status === "failed" ? `research failed (${c.reason ?? "unknown"}), press Re-run to retry` : `the company stopped before scoring (${c.reason ?? c.status})`}.</span>}
         </div>
 
         <h2>Facts and evidence</h2>

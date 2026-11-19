@@ -82,8 +82,11 @@ export async function runCompany(id: number, opts: { force?: boolean } = {}): Pr
         await finish(id, "manual_review", reason, { t0, version });
         return { status: "manual_review", reason, tokens: meter.used };
       }
-      await finish(id, "failed", reason, { t0, version });
-      return { status: "failed", reason, tokens: meter.used };
+      // Not a hard "stop" (login/robots): the site just could not be read this time. Say so plainly and offer a Retry.
+      const nice = friendlyError(reason);
+      await openCheckpoint(id, "qualification", `research failed: ${nice}`, { failed: true, fetchReason: reason });
+      await finish(id, "failed", nice, { t0, version });
+      return { status: "failed", reason: nice, tokens: meter.used };
     }
     await logStep(id, "scrape", { url: homeUrl, method: home.method, words: home.wordCount });
 
@@ -206,6 +209,7 @@ export async function runCompany(id: number, opts: { force?: boolean } = {}): Pr
     }
     const msg = friendlyError(e);
     await logStep(id, "error", { message: msg, raw: String((e as Error).message ?? e).slice(0, 400) });
+    await openCheckpoint(id, "qualification", `research failed: ${msg}`, { failed: true }); // shows in the Review queue with a Retry button
     await finish(id, "failed", msg, { tokens: meter.used, t0, version });
     return { status: "failed", reason: msg, tokens: meter.used };
   }
