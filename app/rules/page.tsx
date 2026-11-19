@@ -127,7 +127,7 @@ export default function Rules() {
             </div>
             <div className="field" style={{ marginTop: 12, maxWidth: 320 }}><label>Follow-up days after the first email</label>
               <input value={cfg.followUpDays.join(", ")} onChange={(e) => set({ followUpDays: e.target.value.split(",").map((x) => Number(x.trim())).filter((x) => x > 0) })} /></div>
-            <h2>Learned from your choices <span className="small muted">usually filled by approving suggestions on the Learning page</span></h2>
+            <h2>Learned from your choices <span className="small muted">usually filled by approving suggestions on the Learning page (open /learn)</span></h2>
             <div className="small muted" style={{ marginBottom: 6 }}>Job-title words that boost a contact</div>
             <Tags value={cfg.preferredTitleKeywords} onChange={(v) => set({ preferredTitleKeywords: v })} placeholder="e.g. security" />
             <div className="small muted" style={{ margin: "14px 0 6px" }}>Discovery source order (first = queued first)</div>
@@ -149,7 +149,7 @@ export default function Rules() {
             <Tags value={cfg.email.bannedPhrases} onChange={(v) => set({ email: { ...cfg.email, bannedPhrases: v } })} placeholder="phrase the email must never use" />
             <p className="small muted">Drafts that break these rules are flagged for your review before they can be sent.</p>
             <h2>Style notes for the writer</h2>
-            <div className="small muted" style={{ marginBottom: 6 }}>Extra instructions added to every draft, e.g. "Keep emails under 90 words". Often filled by approving suggestions on the Learning page.</div>
+            <div className="small muted" style={{ marginBottom: 6 }}>Extra instructions added to every draft, e.g. "Keep emails under 90 words". Often filled by approving suggestions on the Learning page (open /learn).</div>
             <Tags value={cfg.emailStyleNotes} onChange={(v) => set({ emailStyleNotes: v })} placeholder="a short instruction" />
           </div>
         )}

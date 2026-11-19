@@ -37,14 +37,14 @@ email validator (name, grounded hook, length, no placeholders) · recipient hard
 - Not included: HubSpot sync, scheduled (cron) runs, Apollo (planned for when Hunter's monthly searches run out).
 
 ## Evals and the feedback loop
-**Evals** (`/evals`, `npm run eval`): a golden set of accounts (page snapshots + human-labelled answers: certified? B2B SaaS? stage?).
+**Evals** (`/evals`, `npm run eval`). `/evals` and `/learn` are not in the navigation on purpose: open them by address. a golden set of accounts (page snapshots + human-labelled answers: certified? B2B SaaS? stage?).
 - *Extraction eval* re-runs the same extraction the pipeline uses and scores it: certified recall (never miss a certified company), accuracy, SaaS and stage accuracy, share of unverifiable quotes rejected. Release gates pass/fail, and any drop of 5+ points versus the last run is flagged as a regression.
 - Every run records the model and a fingerprint of the prompt, so a wording or model change shows up in the history. The page warns when they changed since the last run.
 - *Email eval* writes emails for labelled non-certified SaaS cases with a made-up contact (never sent), checks the hard rules, and asks a judge model to score specificity, role fit, tone and unsupported claims. The judge is the same model family, so it is a signal, not proof.
 - Labels written by Claude are marked "draft" until you confirm them. Disqualifying an account in the Review queue adds it to the golden set automatically.
 - `npm run eval -- https://your-app.vercel.app` exits non-zero if a gate fails or quality regressed (usable as a CI gate).
 
-**Feedback loop** (`/learning`): measured signals become *suggested* rule changes, never automatic ones.
+**Feedback loop** (`/learn`; the old `/learning` address redirects): measured signals become *suggested* rule changes, never automatic ones.
 - Signals: reply outcomes, edits you make to drafts (sentence-level diff), contacts you confirm or replace (with a reason), maybe-band decisions.
 - Rules (each with a minimum sample size, and silent below it): reweight the score toward what gets replies, queue the best-replying source first, ban phrases you keep deleting, shorten emails you keep cutting, raise the contact auto-accept bar, prefer job titles you choose by hand, lower the Flagged threshold if you qualify most maybes.
 - *Apply* saves a **new, reversible ICP version** and logs it. A kind then stays quiet until 5 new records arrive, so applying a change cannot ratchet. Run the evals afterwards to confirm nothing got worse.

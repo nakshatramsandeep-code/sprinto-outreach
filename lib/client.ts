@@ -45,5 +45,5 @@ export const invalidate = (path?: string) => { if (path) cache.delete(path); els
 // Which API each page loads first (used for hover/idle prefetch).
 export const PAGE_DATA: Record<string, string> = {
   "/": "/api/home", "/review": "/api/review", "/outreach": "/api/drafts", "/pipeline": "/api/pipeline", "/discover": "/api/candidates",
-  "/accounts": "/api/companies", "/analytics": "/api/analytics", "/evals": "/api/evals", "/learning": "/api/learning", "/rules": "/api/icp", "/settings": "/api/settings",
+  "/accounts": "/api/companies", "/analytics": "/api/analytics", "/evals": "/api/evals", "/learn": "/api/learning", "/rules": "/api/icp", "/settings": "/api/settings",
 };

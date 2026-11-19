@@ -13,8 +13,7 @@ const LINKS = [
   { href: "/discover", label: "Discover" },
   { href: "/accounts", label: "Accounts" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/evals", label: "Evals" },
-  { href: "/learning", label: "Learning" },
+  // /evals and /learn exist but are deliberately not in the nav: open them by address.
   { href: "/rules", label: "ICP & Rules" },
   { href: "/settings", label: "Settings" },
 ];

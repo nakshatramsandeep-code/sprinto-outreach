@@ -64,7 +64,7 @@ describe("client data cache", () => {
   });
 
   it("every nav page has a data endpoint to warm", () => {
-    for (const p of ["/", "/review", "/outreach", "/pipeline", "/discover", "/accounts", "/analytics", "/evals", "/learning", "/rules", "/settings"]) {
+    for (const p of ["/", "/review", "/outreach", "/pipeline", "/discover", "/accounts", "/analytics", "/evals", "/learn", "/rules", "/settings"]) {
       expect(PAGE_DATA[p], p).toMatch(/^\/api\//);
     }
   });
