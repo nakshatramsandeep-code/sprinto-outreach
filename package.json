@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "eval": "node scripts/eval.mjs",
+    "eval:loop": "node scripts/eval-loop.mjs",
+    "perf": "node scripts/perf.mjs",
     "db:apply": "node scripts/apply-schema.mjs"
   },
   "dependencies": {

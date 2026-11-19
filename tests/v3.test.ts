@@ -131,8 +131,8 @@ describe("learning: stays silent without enough data", () => {
 describe("learning: score weights from outcomes", () => {
   it("shifts weight toward the component repliers scored higher on, keeping the total at 100", () => {
     const sent = [
-      ...Array.from({ length: 5 }, (_, i) => row({ id: i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })),
-      ...Array.from({ length: 6 }, (_, i) => row({ id: 10 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) })),
+      ...Array.from({ length: 15 }, (_, i) => row({ id: i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })),
+      ...Array.from({ length: 30 }, (_, i) => row({ id: 100 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) })),
     ];
     const s = suggest({ ...empty, sent }, DEFAULT_ICP).find((x) => x.kind === "weights")!;
     expect(s).toBeTruthy();
@@ -142,7 +142,11 @@ describe("learning: score weights from outcomes", () => {
     expect(s.evidence.join(" ")).toMatch(/Enterprise pull|Compliance trigger/);
   });
   it("does nothing when repliers and non-repliers look alike", () => {
-    const sent = [...Array.from({ length: 6 }, (_, i) => row({ id: i, outcome: "replied" })), ...Array.from({ length: 6 }, (_, i) => row({ id: 20 + i, outcome: "no_reply" }))];
+    const sent = [...Array.from({ length: 20 }, (_, i) => row({ id: i, outcome: "replied" })), ...Array.from({ length: 30 }, (_, i) => row({ id: 100 + i, outcome: "no_reply" }))];
+    expect(suggest({ ...empty, sent }, DEFAULT_ICP).find((x) => x.kind === "weights")).toBeUndefined();
+  });
+  it("refuses to tune weights from a small sample even when it looks dramatic", () => {
+    const sent = [...Array.from({ length: 5 }, (_, i) => row({ id: i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })), ...Array.from({ length: 6 }, (_, i) => row({ id: 10 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) }))];
     expect(suggest({ ...empty, sent }, DEFAULT_ICP).find((x) => x.kind === "weights")).toBeUndefined();
   });
 });
@@ -195,16 +199,24 @@ describe("learning: what you edit", () => {
 
 describe("learning: guards against drift", () => {
   const sent = [
-    ...Array.from({ length: 5 }, (_, i) => row({ id: i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })),
-    ...Array.from({ length: 6 }, (_, i) => row({ id: 10 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) })),
+    ...Array.from({ length: 15 }, (_, i) => row({ id: i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })),
+    ...Array.from({ length: 30 }, (_, i) => row({ id: 100 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) })),
   ];
   it("after applying a kind it stays quiet until 5 NEW records arrive (no ratcheting)", () => {
     const d = { ...empty, sent };
     expect(suggest(d, DEFAULT_ICP).some((s) => s.kind === "weights")).toBe(true);
     const cooldown = { weights: sent.length };
     expect(suggest(d, DEFAULT_ICP, cooldown).some((s) => s.kind === "weights")).toBe(false);
-    const more = { ...empty, sent: [...sent, ...Array.from({ length: 5 }, (_, i) => row({ id: 100 + i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) }))] };
+    // new evidence alone (it only learns from emails sent AFTER the last change): enough fresh replies and non-replies to decide again
+    const fresh = [
+      ...Array.from({ length: 15 }, (_, i) => row({ id: 500 + i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) })),
+      ...Array.from({ length: 30 }, (_, i) => row({ id: 600 + i, outcome: "no_reply", lines: lines({ enterprise: 0.3, trigger: 0.4 }) })),
+    ];
+    const more = { ...empty, sent: [...sent, ...fresh] };
     expect(suggest(more, DEFAULT_ICP, cooldown).some((s) => s.kind === "weights")).toBe(true);
+    // 5 new records of ONE kind are not enough evidence
+    const lopsided = { ...empty, sent: [...sent, ...Array.from({ length: 5 }, (_, i) => row({ id: 300 + i, outcome: "replied", lines: lines({ enterprise: 0.9, trigger: 0.9 }) }))] };
+    expect(suggest(lopsided, DEFAULT_ICP, cooldown).some((s) => s.kind === "weights")).toBe(false);
   });
   it("never proposes banning wording that contains the company name", () => {
     const edited = [1, 2, 3, 4].map((i) => row({ id: i, edited: true, removed: ["Sprinto automates compliance evidence collection for teams."], origWords: 100, finalWords: 95 }));
@@ -227,6 +239,7 @@ describe("learning: contacts and the maybe band", () => {
   it("learns a title keyword you pick repeatedly, and the ranker then boosts it", () => {
     const contacts = [
       { mode: "override" as const, title: "Head of Trust", reason: null }, { mode: "override" as const, title: "Trust & Safety Lead", reason: null },
+      { mode: "override" as const, title: "Trust Manager", reason: null }, { mode: "override" as const, title: "VP Security", reason: null },
       { mode: "confirmed" as const, title: "CTO", reason: null }, { mode: "confirmed" as const, title: "CEO", reason: null },
     ];
     const s = suggest({ ...empty, contacts }, DEFAULT_ICP).find((x) => x.kind === "titles")!;
@@ -237,7 +250,8 @@ describe("learning: contacts and the maybe band", () => {
     expect(pickContact([p], true, 50, kw).chosen).not.toBeNull();
   });
   it("lowers the Flagged threshold when you qualify most maybe-band accounts", () => {
-    const maybes = [{ score: 55, action: "qualify" as const }, { score: 52, action: "qualify" as const }, { score: 58, action: "qualify" as const }, { score: 50, action: "qualify" as const }, { score: 45, action: "disqualify" as const }];
+    const maybes = [{ score: 55, action: "qualify" as const }, { score: 52, action: "qualify" as const }, { score: 58, action: "qualify" as const }, { score: 50, action: "qualify" as const },
+      { score: 57, action: "qualify" as const }, { score: 54, action: "qualify" as const }, { score: 56, action: "qualify" as const }, { score: 45, action: "disqualify" as const }];
     const s = suggest({ ...empty, maybes }, DEFAULT_ICP).find((x) => x.kind === "maybe")!;
     expect((s.patch as { thresholds: { flagged: number } }).thresholds.flagged).toBe(50);
   });

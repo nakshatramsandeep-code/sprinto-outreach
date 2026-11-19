@@ -18,10 +18,12 @@ export const FOLLOWUP_DRAFTS_QUERY: [string, unknown[]] = ["SELECT company_id, k
 
 // Pure: which follow-ups are due (day 3 / 7 / 14 after the first email, no reply, no draft for that day yet).
 export function computeDue(sent: (Omit<SentRow, "contact"> & { chosen?: { first_name: string; last_name: string | null } | null })[], existing: { company_id: number; kind: string }[], followUpDays: number[]): DueFollowUp[] {
-  const have = new Set(existing.map((e) => `${e.company_id}:${e.kind}`));
+  // The furthest step already drafted for each company: once day 7 is drafted, day 3 is behind us and must not be offered again.
+  const furthest = new Map<number, number>();
+  for (const e of existing) { const d = Number(e.kind.replace("followup_", "")); if (Number.isFinite(d)) furthest.set(e.company_id, Math.max(furthest.get(e.company_id) ?? 0, d)); }
   const due: DueFollowUp[] = [];
   for (const s of sent) {
-    const days = [...followUpDays].sort((a, b) => a - b).filter((d) => s.days >= d && !have.has(`${s.company_id}:followup_${d}`));
+    const days = [...followUpDays].sort((a, b) => a - b).filter((d) => s.days >= d && d > (furthest.get(s.company_id) ?? 0));
     if (!days.length) continue;
     const day = days[days.length - 1]; // the latest step that has come due
     due.push({

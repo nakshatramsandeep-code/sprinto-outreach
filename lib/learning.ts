@@ -1,6 +1,6 @@
 import { qm, type Query } from "./db";
 import { phrases } from "./diff";
-import { getIcp, saveIcp, validateIcp, ICP_QUERY, parseIcp, type IcpConfig } from "./icp";
+import { getIcp, saveIcp, validateIcp, ICP_QUERY, parseIcp, DEFAULT_ICP, type IcpConfig } from "./icp";
 import { audit, getSetting, setSetting } from "./settings";
 
 // ---------------------------------------------------------------------------------------------
@@ -10,7 +10,9 @@ import { audit, getSetting, setSetting } from "./settings";
 // Every rule has a minimum sample size: with too little data it says so instead of guessing.
 // ---------------------------------------------------------------------------------------------
 
-export const MIN = { weightsOutcomes: 10, weightsEachSide: 3, tier: 5, source: 5, edits: 3, contacts: 4, maybes: 5, phraseDrafts: 3, cooldown: 5 };
+// weightsOutcomes / weightsEachSide are large on purpose: with small groups the t statistic has heavy tails and lucky streaks look
+// significant (measured: 10% false changes on pure noise at 10 outcomes; much lower at 40).
+export const MIN = { weightsOutcomes: 40, weightsEachSide: 10, tier: 5, source: 5, edits: 3, contacts: 4, maybes: 8, phraseDrafts: 3, cooldown: 5 };
 
 // Which pile of records each suggestion kind learns from (used for the cool-down below).
 const COUNT_OF: Record<string, "sent" | "contacts" | "maybes"> = { weights: "sent", tier: "sent", source: "sent", phrases: "sent", length: "sent", autoaccept: "contacts", titles: "contacts", maybe: "maybes" };
@@ -46,32 +48,63 @@ function group<T>(rows: T[], key: (r: T) => string | null): Map<string, T[]> {
   return m;
 }
 
+// ---- statistics: a difference only counts if it is unlikely to be chance ----
+const variance = (xs: number[]) => { if (xs.length < 2) return 0; const m = mean(xs); return xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1); };
+// Welch t statistic for "do these two groups really differ in average?"
+export function welchT(a: number[], b: number[]): number {
+  const se = Math.sqrt(variance(a) / a.length + variance(b) / b.length);
+  const d = mean(a) - mean(b);
+  return se === 0 ? (d === 0 ? 0 : Math.sign(d) * Infinity) : d / se;
+}
+// z statistic for "do these two reply rates really differ?"
+export function twoPropZ(x1: number, n1: number, x2: number, n2: number): number {
+  const p = (x1 + x2) / (n1 + n2), se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2));
+  return se === 0 ? 0 : (x1 / n1 - x2 / n2) / se;
+}
+// P(at least k of n successes) if it were a coin flip: "could this lopsided choice be luck?"
+export function binomTail(k: number, n: number, p = 0.5): number {
+  let total = 0, c = 1; // c = C(n, i), built up iteratively
+  for (let i = 0; i <= n; i++) { if (i >= k) total += c * p ** i * (1 - p) ** (n - i); c = (c * (n - i)) / (i + 1); }
+  return total;
+}
+// weightsT is deliberately strict (t >= 3.3, about 1 in 1000): the rule is re-checked every time new outcomes arrive and across 5 components,
+// so a laxer bar fires on pure noise often (2.5 fired in ~45% of noise-only runs, measured by the loop simulation).
+export const SIG = { weightsT: 3.3, weightsMinEffect: 0.04, rateZ: 1.96, binomP: 0.05, driftCap: 10, maxStep: 4, maxPreferredKeywords: 8 };
+
 // ---- 1. score weights from what actually got replies ----
-function weightSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
-  const withO = d.sent.filter((s) => s.outcome && s.lines?.length);
+// Only uses emails sent SINCE the last time this rule was applied (fresh evidence), only fires when the difference is statistically
+// significant, moves weights in small steps, and never lets a weight drift more than 10 points from the defaults. Together that makes
+// it converge instead of ratchet, and keeps it quiet on noise.
+function weightSuggestion(d: LearningData, cfg: IcpConfig, since = 0): Suggestion | null {
+  const withO = d.sent.slice(since).filter((s) => s.outcome && s.lines?.length);
   const pos = withO.filter((s) => isPos(s.outcome)), neg = withO.filter((s) => s.outcome === "no_reply");
   if (withO.length < MIN.weightsOutcomes || pos.length < MIN.weightsEachSide || neg.length < MIN.weightsEachSide) return null;
-  const frac = (rows: SentRow[], key: string) => mean(rows.map((r) => { const l = r.lines.find((x) => x.key === key); return l && l.max ? l.got / l.max : 0; }));
+  const fracOf = (r: SentRow, key: string) => { const l = r.lines.find((x) => x.key === key); return l && l.max ? l.got / l.max : 0; };
   const keys = Object.keys(cfg.weights) as (keyof IcpConfig["weights"])[];
-  const diffs = keys.map((k) => ({ k, d: frac(pos, k) - frac(neg, k), p: frac(pos, k), n: frac(neg, k) }));
-  if (Math.max(...diffs.map((x) => Math.abs(x.d))) < 0.15) return null;
+  const comp = keys.map((k) => { const pv = pos.map((r) => fracOf(r, k)), nv = neg.map((r) => fracOf(r, k)); return { k, d: mean(pv) - mean(nv), p: mean(pv), n: mean(nv), t: welchT(pv, nv) }; });
+  if (!comp.some((c) => Math.abs(c.t) >= SIG.weightsT && Math.abs(c.d) >= SIG.weightsMinEffect)) return null; // not distinguishable from chance
+
+  const def = DEFAULT_ICP.weights, lo = (k: keyof IcpConfig["weights"]) => Math.max(0, def[k] - SIG.driftCap), hi = (k: keyof IcpConfig["weights"]) => def[k] + SIG.driftCap;
   const next = { ...cfg.weights };
-  for (const { k, d } of diffs) next[k] = Math.max(0, Math.round(cfg.weights[k] + Math.max(-5, Math.min(5, d * 20))));
-  // Keep the total at 100 by taking the excess from the components LEAST linked to replies (or giving the shortfall to the MOST linked).
+  for (const c of comp) {
+    const step = Math.abs(c.t) >= 1.5 ? Math.max(-SIG.maxStep, Math.min(SIG.maxStep, Math.round(c.d * 20))) : 0;
+    next[c.k] = Math.max(lo(c.k), Math.min(hi(c.k), cfg.weights[c.k] + step));
+  }
+  // Keep the total at 100: take any excess from the components LEAST linked to replies, give any shortfall to the MOST linked (within the drift cap).
   let sum = Object.values(next).reduce((a, b) => a + b, 0);
-  const byD = [...diffs].sort((a, b) => a.d - b.d).map((x) => x.k);
+  const byD = [...comp].sort((a, b) => a.d - b.d).map((x) => x.k);
   for (let guard = 0; sum !== 100 && guard < 400; guard++) {
-    if (sum > 100) { const k = byD.filter((x) => next[x] > 0)[guard % Math.max(1, byD.filter((x) => next[x] > 0).length)]; next[k]--; sum--; }
-    else { const k = [...byD].reverse()[guard % byD.length]; next[k]++; sum++; }
+    if (sum > 100) { const room = byD.filter((x) => next[x] > lo(x)); if (!room.length) break; next[room[guard % room.length]]--; sum--; }
+    else { const room = [...byD].reverse().filter((x) => next[x] < hi(x)); if (!room.length) break; next[room[guard % room.length]]++; sum++; }
   }
   if (sum !== 100 || keys.every((k) => next[k] === cfg.weights[k])) return null;
-  const top = [...diffs].sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 2);
+  const top = [...comp].sort((a, b) => Math.abs(b.t) - Math.abs(a.t)).slice(0, 2);
   return mk("weights", "Shift score weights toward what gets replies",
-    "Accounts that replied scored differently from accounts that did not.",
-    [...top.map((t) => `${LABEL[t.k]}: replied accounts averaged ${pct(t.p)} of the maximum vs ${pct(t.n)} for no-reply (${t.d > 0 ? "higher" : "lower"} for repliers)`),
-      `Based on ${withO.length} emails with a recorded outcome (${pos.length} positive, ${neg.length} no reply)`,
-      `Proposed: ${keys.map((k) => `${LABEL[k]} ${cfg.weights[k]}→${next[k]}`).join(", ")}`],
-    { weights: next }, withO.length >= 20 ? "medium" : "low");
+    "Accounts that replied scored differently from accounts that did not, by more than chance would explain.",
+    [...top.map((t) => `${LABEL[t.k]}: replied accounts averaged ${pct(t.p)} of the maximum vs ${pct(t.n)} for no-reply (${t.d > 0 ? "higher" : "lower"} for repliers, t=${Number.isFinite(t.t) ? t.t.toFixed(1) : "very high"})`),
+      `Based on ${withO.length} emails with a recorded outcome since the last change (${pos.length} positive, ${neg.length} no reply)`,
+      `Proposed: ${keys.map((k) => `${LABEL[k]} ${cfg.weights[k]}→${next[k]}`).join(", ")} (never more than ${SIG.driftCap} points from the defaults)`],
+    { weights: next }, withO.length >= 40 ? "medium" : "low");
 }
 
 // ---- 2. is the tier predicting replies? (insight only) ----
@@ -79,6 +112,8 @@ function tierInsight(d: LearningData): Suggestion | null {
   const g = group(d.sent.filter((s) => s.outcome), (s) => s.tier);
   const A = g.get("A") ?? [], B = g.get("B") ?? [];
   if (A.length < MIN.tier || B.length < MIN.tier || rate(A) >= rate(B) - 0.1) return null;
+  const hitsA = A.filter((r) => isPos(r.outcome)).length, hitsB = B.filter((r) => isPos(r.outcome)).length;
+  if (twoPropZ(hitsB, B.length, hitsA, A.length) < SIG.rateZ) return null; // could be luck
   return mk("tier", "Tier A is not replying more than Tier B",
     "The score should rank better accounts higher, and right now it does not.",
     [`Tier A: ${pct(rate(A))} replied (n=${A.length}). Tier B: ${pct(rate(B))} replied (n=${B.length})`, "Review the weights, or check whether the contacts at Tier A accounts are the right people."], null, "low");
@@ -91,6 +126,9 @@ function sourceSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
   if (rows.length < 2) return null;
   const best = [...rows].sort((a, b) => b.r - a.r);
   if (best[0].r - best[best.length - 1].r < 0.15) return null;
+  const hits = (src: string) => (g.get(src) ?? []).filter((r) => isPos(r.outcome)).length;
+  const top = best[0], bottom = best[best.length - 1];
+  if (twoPropZ(hits(top.s), top.n, hits(bottom.s), bottom.n) < SIG.rateZ) return null; // best vs worst source not distinguishable from luck
   const known = rows.map((x) => x.s);
   const currentOrder = cfg.sourcePriority.filter((s) => known.includes(s));
   const proposedOrder = best.map((x) => x.s);
@@ -159,15 +197,16 @@ function autoAcceptSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | nul
 const STOP = new Set(["and", "the", "for", "with", "senior", "junior", "lead"]);
 function titleSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
   const over = d.contacts.filter((c) => c.mode === "override" && c.title);
-  if (over.length < 2) return null;
+  if (over.length < MIN.contacts) return null;
   const counts = new Map<string, number>();
   for (const c of over) for (const w of new Set((c.title as string).toLowerCase().split(/[^a-z]+/).filter((x) => x.length >= 4 && !STOP.has(x)))) counts.set(w, (counts.get(w) ?? 0) + 1);
   const have = cfg.preferredTitleKeywords.map((k) => k.toLowerCase());
-  const top = [...counts.entries()].filter(([w, c]) => c >= 2 && !have.includes(w)).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  if (!top.length) return null;
+  // A real preference is CONSISTENT: the word shows up in at least 3 of your choices AND at least half of them. Random picks never do.
+  const top = [...counts.entries()].filter(([w, c]) => c >= 3 && c / over.length >= 0.5 && !have.includes(w)).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (!top.length || have.length + top.length > SIG.maxPreferredKeywords) return null;
   return mk("titles", "Prefer the job titles you pick by hand",
     "You keep choosing contacts with the same words in their title.",
-    top.map(([w, c]) => `"${w}" appeared in the title of ${c} contacts you chose yourself`),
+    top.map(([w, c]) => `"${w}" is in the title of ${c} of the ${over.length} contacts you chose yourself (${pct(c / over.length)})`),
     { preferredTitleKeywords: [...cfg.preferredTitleKeywords, ...top.map(([w]) => w)] }, "low");
 }
 
@@ -175,7 +214,8 @@ function titleSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
 function maybeSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
   if (d.maybes.length < MIN.maybes) return null;
   const yes = d.maybes.filter((m) => m.action === "qualify");
-  if (yes.length / d.maybes.length < 0.7) return null;
+  if (yes.length / d.maybes.length < 0.75) return null;
+  if (binomTail(yes.length, d.maybes.length) > SIG.binomP) return null; // a lopsided choice that a coin flip could produce is not a preference
   const lowest = Math.min(...yes.map((m) => m.score));
   const next = Math.max(lowest, cfg.thresholds.maybe + 1);
   if (next >= cfg.thresholds.flagged) return null;
@@ -188,7 +228,7 @@ function maybeSuggestion(d: LearningData, cfg: IcpConfig): Suggestion | null {
 // cooldown[kind] = how many records existed when that kind was last applied. A kind stays quiet until MIN.cooldown NEW
 // records arrive, so applying a change can never immediately trigger another one from the same old data (no ratcheting).
 export function suggest(d: LearningData, cfg: IcpConfig, cooldown: Record<string, number> = {}): Suggestion[] {
-  return [weightSuggestion(d, cfg), tierInsight(d), sourceSuggestion(d, cfg), phraseSuggestion(d, cfg), lengthSuggestion(d, cfg), autoAcceptSuggestion(d, cfg), titleSuggestion(d, cfg), maybeSuggestion(d, cfg)]
+  return [weightSuggestion(d, cfg, cooldown.weights ?? 0), tierInsight(d), sourceSuggestion(d, cfg), phraseSuggestion(d, cfg), lengthSuggestion(d, cfg), autoAcceptSuggestion(d, cfg), titleSuggestion(d, cfg), maybeSuggestion(d, cfg)]
     .filter((s): s is Suggestion => s !== null)
     .filter((s) => cooldown[s.kind] === undefined || d[COUNT_OF[s.kind]].length >= cooldown[s.kind] + MIN.cooldown);
 }
@@ -226,7 +266,8 @@ export function stats(d: LearningData) {
 const LEARNING_QUERIES: Query[] = [
   [`SELECT d.id, c.score, c.tier, c.source, d.hook_field, d.edited, d.outcome, c.score_breakdown->'lines' AS lines,
            c.contact->'chosen'->>'position' AS title, d.edit_diff
-    FROM drafts d JOIN companies c ON c.id = d.company_id WHERE d.kind='first' AND d.review_status='sent'`],
+    FROM drafts d JOIN companies c ON c.id = d.company_id WHERE d.kind='first' AND d.review_status='sent'
+    ORDER BY d.sent_at, d.id`], // chronological: the weights rule learns only from emails sent since its last change
   ["SELECT contact->>'override' AS override, contact->'chosen'->>'position' AS title, contact->>'override_reason' AS reason FROM companies WHERE contact->>'decided_by_human'='true'"],
   [`SELECT (data->>'score')::int AS score, resolution->>'action' AS action FROM checkpoints
     WHERE kind='qualification' AND status='resolved' AND data ? 'score' AND resolution->>'action' IN ('qualify','disqualify')`],

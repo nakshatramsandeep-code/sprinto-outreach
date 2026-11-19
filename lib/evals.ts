@@ -49,6 +49,8 @@ export type ExtractionMetrics = {
   rejectedQuotesPct: number | null;
   avgTokens: number;
   avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
 };
 
 export function computeExtractionMetrics(rows: { expected: Expected; pred: Pred }[]): ExtractionMetrics {
@@ -69,7 +71,29 @@ export function computeExtractionMetrics(rows: { expected: Expected; pred: Pred 
     rejectedQuotesPct: ratio(rej, raw),
     avgTokens: rows.length ? Math.round(tok / rows.length) : 0,
     avgMs: rows.length ? Math.round(ms / rows.length) : 0,
+    p50Ms: percentile(rows.map((r) => r.pred.ms), 0.5),
+    p95Ms: percentile(rows.map((r) => r.pred.ms), 0.95),
   };
+}
+
+export function percentile(xs: number[], p: number): number {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  return Math.round(s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))]);
+}
+
+// ---- efficiency: is it cheap and fast enough to be worth running? (the case's goal: under 2 min and cheaper than 15-20 min by hand) ----
+export const EFFICIENCY = { maxAvgTokens: 4000, maxP95Ms: 30_000, maxUsdPerCompany: 0.01, manualMinutes: 17.5 };
+export type EffGate = { name: string; value: string; limit: string; pass: boolean };
+export function checkEfficiency(m: ExtractionMetrics, usdPerMillionTokens: number): EffGate[] {
+  const usd = (m.avgTokens / 1_000_000) * usdPerMillionTokens;
+  const speedup = m.p50Ms > 0 ? Math.round((EFFICIENCY.manualMinutes * 60_000) / m.p50Ms) : 0;
+  return [
+    { name: "Tokens per company (average)", value: String(m.avgTokens), limit: `<= ${EFFICIENCY.maxAvgTokens}`, pass: m.avgTokens <= EFFICIENCY.maxAvgTokens },
+    { name: "Reading time per company, slowest 5% (p95)", value: `${(m.p95Ms / 1000).toFixed(1)}s`, limit: `<= ${EFFICIENCY.maxP95Ms / 1000}s`, pass: m.p95Ms <= EFFICIENCY.maxP95Ms },
+    { name: "Estimated LLM cost per company", value: `$${usd.toFixed(4)}`, limit: `<= $${EFFICIENCY.maxUsdPerCompany}`, pass: usd <= EFFICIENCY.maxUsdPerCompany },
+    { name: "Speed-up vs 17.5 min by hand (typical case)", value: `${speedup}x`, limit: ">= 10x", pass: speedup >= 10 },
+  ];
 }
 
 export type Gate = { name: string; value: number | null; threshold: number; pass: boolean | null };

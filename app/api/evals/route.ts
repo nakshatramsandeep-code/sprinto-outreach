@@ -1,6 +1,6 @@
 import { route } from "@/lib/api";
 import { qm } from "@/lib/db";
-import { checkGates, GATES, isLabeled, regressions, type ExtractionMetrics, type Expected } from "@/lib/evals";
+import { checkGates, checkEfficiency, GATES, isLabeled, regressions, type ExtractionMetrics, type Expected } from "@/lib/evals";
 import { extractFingerprint } from "@/lib/extract";
 import { emailFingerprint } from "@/lib/email";
 import { ICP_QUERY, parseIcp } from "@/lib/icp";
@@ -34,7 +34,8 @@ export const GET = route(async () => {
   return {
     cases: cases.map((c) => ({ id: c.id, domain: c.domain, name: c.name, expected: c.expected as Expected, labeled_by: c.labeled_by, company_id: c.company_id, pages: c.pages, labeled: isLabeled(c.expected), system: c.system })),
     runs,
-    latest: latest && { ...latest, gates: checkGates(latest.metrics as ExtractionMetrics), regressions: regressions((extraction[1]?.metrics as ExtractionMetrics) ?? null, latest.metrics as ExtractionMetrics), failures: detailOf(latest.id)?.failures ?? [] },
+    loopLatest: runs.find((r) => r.kind === "loop") ?? null,
+    latest: latest && { ...latest, gates: checkGates(latest.metrics as ExtractionMetrics), efficiency: latest.metrics.p95Ms !== undefined ? checkEfficiency(latest.metrics as ExtractionMetrics, config.usdPerMillionTokens) : [], regressions: regressions((extraction[1]?.metrics as ExtractionMetrics) ?? null, latest.metrics as ExtractionMetrics), failures: detailOf(latest.id)?.failures ?? [] },
     emailLatest: emailLatest && { ...emailLatest, rows: detailOf(emailLatest.id)?.results ?? [] },
     current: { extractHash: extractFingerprint(config.targetFrameworks), emailHash: emailFingerprint({ profile, rules: config.email, styleNotes: config.emailStyleNotes }), fastModel: MODELS.fast(), proModel: MODELS.pro() },
     gates: GATES,

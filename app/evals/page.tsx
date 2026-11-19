@@ -12,10 +12,13 @@ type Metrics = {
   stage: { n: number; correct: number; accuracy: number | null }; rejectedQuotesPct: number | null; avgTokens: number; avgMs: number;
 };
 type Run = { id: number; kind: string; model: string; prompt_hash: string; icp_version: number | null; note: string | null; metrics: any; created_at: string };
+type EffGate = { name: string; value: string; limit: string; pass: boolean };
+type LoopGate = { name: string; value: number; threshold: string; pass: boolean };
 type Resp = {
+  loopLatest: (Run & { metrics: { allPass: boolean; gates: LoopGate[]; weights: any; weightsLong: any; edits: any; contacts: any } }) | null;
   cases: { id: number; domain: string; name: string | null; expected: Expected; labeled_by: string | null; company_id: number | null; pages: number; labeled: boolean; system: { certified: boolean; saas: boolean | null; stage: string | null } | null }[];
   runs: Run[];
-  latest: (Run & { metrics: Metrics; gates: Gate[]; regressions: string[]; failures: any[] }) | null;
+  latest: (Run & { metrics: Metrics & { p50Ms?: number; p95Ms?: number }; gates: Gate[]; efficiency?: EffGate[]; regressions: string[]; failures: any[] }) | null;
   emailLatest: (Run & { rows: any[] }) | null;
   current: { extractHash: string; emailHash: string; fastModel: string; proModel: string };
   gates: Record<string, number>;
@@ -53,8 +56,8 @@ export default function Evals() {
   const [msg, setMsg] = useState("");
   const [add, setAdd] = useState("");
 
-  async function run(kind: "extraction" | "email") {
-    setBusy(kind); setMsg(`Running the ${kind} eval (up to a minute)...`);
+  async function run(kind: "extraction" | "email" | "loop") {
+    setBusy(kind); setMsg(kind === "loop" ? "Running the feedback-loop simulation..." : `Running the ${kind} eval (up to a minute)...`);
     try { await api("/api/evals/run", { body: { kind } }); setMsg("Done."); } catch (e) { setMsg((e as Error).message); }
     setBusy(""); reload();
   }
@@ -73,7 +76,7 @@ export default function Evals() {
   return (
     <>
       <PageHead title="Evals" sub="Does the model still get the facts right? Scored against a human-labelled golden set, with release gates."
-        right={<><button onClick={() => run("extraction")} disabled={!!busy}>{busy === "extraction" ? "Running..." : "Run extraction eval"}</button><button className="ghost" onClick={() => run("email")} disabled={!!busy}>{busy === "email" ? "Running..." : "Run email eval"}</button></>} />
+        right={<><button onClick={() => run("extraction")} disabled={!!busy}>{busy === "extraction" ? "Running..." : "Run extraction eval"}</button><button className="ghost" onClick={() => run("email")} disabled={!!busy}>{busy === "email" ? "Running..." : "Run email eval"}</button><button className="ghost" onClick={() => run("loop")} disabled={!!busy}>{busy === "loop" ? "Running..." : "Run loop simulation"}</button></>} />
       <main>
         {error && <div className="card" style={{ borderColor: "var(--bad)" }}>Error: {error}</div>}
         {msg && <div className="card small">{msg}</div>}
@@ -97,6 +100,14 @@ export default function Evals() {
               {" "}Unverifiable quotes rejected: {pct(l.metrics.rejectedQuotesPct)} of the model's claims.
             </div>
           </div>
+          {l.efficiency && l.efficiency.length > 0 && (
+            <div className="card">
+              <b>Efficiency</b> <span className="small muted">{l.metrics.p50Ms ? `median ${(l.metrics.p50Ms / 1000).toFixed(1)}s per company, slowest 5% ${((l.metrics.p95Ms ?? 0) / 1000).toFixed(1)}s` : ""}</span>
+              <table style={{ marginTop: 6 }}><tbody>
+                {l.efficiency.map((g) => <tr key={g.name}><td>{g.name}</td><td><b>{g.value}</b></td><td className="muted">{g.limit}</td><td>{g.pass ? <span className="pill ok">pass</span> : <span className="pill bad">over budget</span>}</td></tr>)}
+              </tbody></table>
+            </div>
+          )}
           {l.failures.length > 0 && (<>
             <h3 style={{ marginBottom: 6 }}>Cases it got wrong</h3>
             {l.failures.map((f: any, i: number) => (
@@ -130,6 +141,23 @@ export default function Evals() {
               <div className="kpi"><div className={m.unsupportedPct ? "label" : "label"}>Had unsupported claims</div><div className="value" style={{ fontSize: 26 }}>{pct(m.unsupportedPct)}</div></div>
             </div>
             {data.emailLatest.rows.filter((r: any) => r.judge?.unsupported_claims?.length).map((r: any) => <div className="small" key={r.domain} style={{ marginTop: 6 }}><b>{r.domain}</b> unsupported: {r.judge.unsupported_claims.join("; ")}</div>)}
+          </>); })()}
+        </div>
+
+        <h2>Feedback-loop simulation</h2>
+        <div className="card">
+          <p className="small muted" style={{ marginTop: 0 }}>Real outcome data is thin, so this proves the <i>mechanism</i>. It invents a world where the truth is known (what really drives replies, what you really prefer), feeds the learning engine the signals a real owner would produce, applies what it suggests, and measures whether things got better. It also checks the engine stays <b>quiet on noise and on too little data</b>. Seeded and repeatable; it does not predict your actual reply rate.</p>
+          {!data?.loopLatest ? <span className="muted">No run yet. Press Run loop simulation.</span> : (() => { const r = data.loopLatest.metrics; const show = (g: LoopGate) => (/%|pts/.test(g.threshold) ? `${Math.round(g.value * 1000) / 10}${g.threshold.includes("pts") ? " pts" : "%"}` : String(g.value)); return (<>
+            <div className="small muted">Run #{data.loopLatest.id} · {ago(data.loopLatest.created_at)} ago · {r.allPass ? "all gates pass" : "some gates FAIL"}</div>
+            <table style={{ marginTop: 6 }}><thead><tr><th>Check</th><th>Result</th><th>Needs</th><th></th></tr></thead><tbody>
+              {r.gates.map((g: LoopGate) => <tr key={g.name}><td>{g.name}</td><td><b>{show(g)}</b></td><td className="muted">{g.threshold}</td><td>{g.pass ? <span className="pill ok">pass</span> : <span className="pill bad">fail</span>}</td></tr>)}
+            </tbody></table>
+            <div className="small muted" style={{ marginTop: 8 }}>
+              Score weights: correlation with true reply odds {r.weights.signal.meanCorrBefore} → {r.weights.signal.meanCorrAfter} after 250 emails and → {r.weightsLong.signal.meanCorrAfter} after 600 (best possible inside the safety cap: {r.weights.signal.meanCorrCeiling}).
+              Edits: your edit rate on the repeated phrase {Math.round(r.edits.withFlaw.editRateBefore * 100)}% → {Math.round(r.edits.withFlaw.editRateAfter * 100)}%.
+              Contacts: agreement with your pick {Math.round(r.contacts.preference.agreementBefore * 100)}% → {Math.round(r.contacts.preference.agreementAfter * 100)}%.
+              Learning is deliberately slow and cautious: it needs a fresh batch of 40+ outcomes for each weights change.
+            </div>
           </>); })()}
         </div>
 
