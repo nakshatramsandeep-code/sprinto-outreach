@@ -42,4 +42,4 @@ for (const [path, maxTrips, maxKb] of BUDGETS) {
   console.log(path.padEnd(18) + `${med}ms`.padStart(8) + `${slow}ms`.padStart(9) + String(Number.isFinite(trips) ? trips : "?").padStart(7) + kb.toFixed(1).padStart(8) + "   " + (problems.length ? "FAIL: " + problems.join("; ") : "ok"));
 }
 console.log(failed ? `\n${failed} endpoint(s) over budget` : "\nAll endpoints within budget");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0; // (not process.exit(): on Windows that can crash Node with open network handles)
